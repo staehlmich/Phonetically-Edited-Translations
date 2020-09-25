@@ -5,7 +5,7 @@
 import argparse
 from typing import Iterator
 from itertools import islice
-
+import re
 
 
 class PartialDataGenerator(object):
@@ -42,12 +42,45 @@ class PartialDataGenerator(object):
         @return:
         """
         triplets = self.__generate_triplets__()
-        for triplet in triplets:
-            print(triplet)
+        target = []
+        source = {}
+        for i, elem in enumerate(self.__generate_triplets__()):
+            if i == 1:
+                target = elem
+                print(target)
+            if i == 2:
+                self.__create_align_dic__(elem)
+        #Generate partial sentences with 2 loops?
 
-    # metainfo = None
-    # target = []
-    # source = []
+    def __create_align_dic__(self, source_sent: str) -> dict:
+        """
+        Method that creates a didctionary with source words (values)
+        and alignemnt positions (keys).
+        @param source_sent: source sentence in GIZA++ format as string.
+        @return:
+        """
+        source = source_sent.rstrip("").split(")")
+        alignment_dic = {}
+        for elem in source:
+            counter = 900
+            elem = elem.lstrip().rstrip()
+            if elem != "":
+                source_word = elem.split("(")[0]
+                #Idea found in this post:
+                #https://stackoverflow.com/questions/4289331/how-to-extract-numbers-from-a-string-in-python
+                positions=[int(s) for s in re.findall(r'\b\d+\b', elem.split("(")[1])]
+                #Since there can be multiple alignments, we iterate over
+                # list with positions.
+                #It is possible to have NULL alignments in both directions!
+                #Words don't work as values, because tokens can be repeated in
+                #a sentence.
+                if positions == []:
+                    counter += 1
+                    alignment_dic[counter] = source_word
+                else:
+                    for pos in positions:
+                        alignment_dic[pos] = source_word
+        return alignment_dic
 
 #GIZA++ output:
 #Line1: target length  and source length.
