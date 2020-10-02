@@ -7,14 +7,13 @@ from typing import Iterator
 from itertools import islice
 import re
 
-
 class PartialDataGenerator(object):
     """
     Class that creates partial sentences from training data.
     """
     def __init__(self, filename):
         self.__filename__= filename
-        self.__format_data__()
+        # self.__format_data__()
 
     def __data_reader__(self)-> Iterator:
         """
@@ -31,26 +30,35 @@ class PartialDataGenerator(object):
         The 3 lines are a GIZA++ relevant format.
         @return:
         """
-        with open(self.__filename__, "r", encoding="utf-8") as infile:
-            triplet_generator = islice(infile, 3)
-            for triplet in triplet_generator:
-                yield triplet
+        #TO DO: How to use islice and yield multiple triplets?
+        # with open(self.__filename__, "r", encoding="utf-8") as infile:
+        triplet_generator = islice((line for line in self.__data_reader__()), 3)
+        return triplet_generator
+        # for triplet in triplet_generator:
+        #     print(triplet)
+            # for triplet in triplet_generator:
+            #     yield triplet
 
-    def __format_data__(self):
+    def __format_data__(self) -> Iterator:
         """
-
-        @return:
+        Method that yields alignments as list (target) and dictionary
+        source).
+        @return: target, source.
         """
-        triplets = self.__generate_triplets__()
         target = []
         source = {}
         for i, elem in enumerate(self.__generate_triplets__()):
             if i == 1:
-                target = elem
-                print(target)
+                target = elem.lstrip().split(" ")
+                #Dirty fix: delete newline char in sentence list.
+                if target[-1] == "\n":
+                    target.pop()
             if i == 2:
-                self.__create_align_dic__(elem)
-        #Generate partial sentences with 2 loops?
+                source = self.__create_align_dic__(elem)
+            #Two easy conditions, so that we don't yield empty elems.
+            if target != []:
+                if source != {}:
+                    yield target, source
 
     def __create_align_dic__(self, source_sent: str) -> dict:
         """
@@ -62,10 +70,11 @@ class PartialDataGenerator(object):
         source = source_sent.rstrip("").split(")")
         alignment_dic = {}
         for elem in source:
+            #Counter for unaligned source (?) words.
             counter = 900
             elem = elem.lstrip().rstrip()
             if elem != "":
-                source_word = elem.split("(")[0]
+                source_word = elem.split("(")[0].rstrip(" ")
                 #Idea found in this post:
                 #https://stackoverflow.com/questions/4289331/how-to-extract-numbers-from-a-string-in-python
                 positions=[int(s) for s in re.findall(r'\b\d+\b', elem.split("(")[1])]
@@ -80,7 +89,40 @@ class PartialDataGenerator(object):
                 else:
                     for pos in positions:
                         alignment_dic[pos] = source_word
+
         return alignment_dic
+
+    def generate_partial_sents(self):
+        """
+
+        @return:
+        """
+        for target, source in self.__format_data__():
+            #Target and source contain "\n" with (EOS).
+            aligned_target = ""
+            aligned_source = ""
+            for i in range(len(target)):
+                # Exclude last element, because we don't have to add "\w" at EOS.
+                if i != len(target):
+                    #Index for source sentence.
+                    j = i+1
+                    try:
+                        aligned_target += target[i] + " "
+                        aligned_source += source[j] + " "
+                    except KeyError:
+                        print(source, target)
+                        # aligned_target += target[i]
+                        # aligned_source += source[j]
+                    # print(aligned_target)
+                    # print(aligned_source)
+                    # print("\n")
+                else:
+                    aligned_target += target[i]
+                    aligned_source += source[j]
+                    #This is the final yield of full sentences.
+                    print(aligned_target)
+                    print(aligned_source)
+                    print("\n")
 
 #GIZA++ output:
 #Line1: target length  and source length.
@@ -97,7 +139,9 @@ def main():
                         help="Path to file.")
     args = parser.parse_args()
     PDG = PartialDataGenerator(args.filename)
-
+    # PDG.generate_partial_sents()
+    for line in PDG.__data_reader__():
+        print(line)
 #1. Read and understand algorithm Niehues et al. (2018)
 #2. Undertand how to read and use GIZA++ alignments.
 #3. Create partial data with ted data and alignment info.
