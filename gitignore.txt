@@ -1,5 +1,0 @@
-#directories
-/fast_align
-/alignments
-/mgizapp
-/subword-nmt
