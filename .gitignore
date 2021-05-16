@@ -1,5 +1,4 @@
 #Ignored directories
-/homophone_analysis
 /data
 /moses
 /mgizapp
@@ -7,6 +6,14 @@
 /subword-nmt/
 /zero/checkpoints
 /fast_align
+/homophone_analysis/*.*
+/homophone_analysis/*/
+!homophone_analysis/*.py
+#/homophone_analysis/
+#/homophone_analysis/mfa_input
+#/homophone_analysis/mfa_output
+#/homophone_analysis/moses_experiments
+
 
 #Test scripts
 python_test.py
