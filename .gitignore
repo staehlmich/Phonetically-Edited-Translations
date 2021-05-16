@@ -1,0 +1,16 @@
+#Ignored directories
+/homophone_analysis
+/data
+/moses
+/mgizapp
+/sample-models/
+/subword-nmt/
+/zero/
+
+#Test scripts
+python_test.py
+tf_test.py
+asr.py
+OSR_us_000_0010_8k.wav
+homophone_analysis/nohup.out
+homophone_analysis/kaldi
