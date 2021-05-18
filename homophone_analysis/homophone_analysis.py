@@ -96,7 +96,26 @@ def find_similar_types(iter1, iter2):
                 similar_types[item1] = item2
     return similar_types
 
-def get_homophone_translations(token, source, translation):
+def get_alignment(sent_id: int, word_id: int, alignment_file: str) -> list:
+    """
+    Helper function that retrieves the alignment of source_token with
+    target_token in sent_n
+    @param sent_id: sentence number in source file.
+    @param word_id: position of token in source sentence.
+    @param alignment_file: fast_align alignment file.
+    @return:
+    """
+    with open(alignment_file, "r", encoding="utf-8") as infile:
+        lines = infile.readlines()
+        for i in range(len(lines)):
+            if i == sent_id:
+                line = [elem.split("-") for elem in lines[i].split()]
+                new_line = [[int(s) for s in sublist] for sublist in line]
+                for j in new_line:
+                    if j[0] == word_id:
+                        return j
+
+def get_homophone_translations(token, source, translation, alignment_file):
     """
     Function that opens a source and reference/target file of aligned
     sentences and prints sentences that contains token on source side.
@@ -105,17 +124,38 @@ def get_homophone_translations(token, source, translation):
     @param translation:
     @return:
     """
+    #STEPS:
+    #1. Iterate over files in parallel
+    #2. Find homophone string in source.
+    #3. Helper function that retrieves alignment for sent_id/word_id --> string to list --> list to dictionary
+    #4. Print searched homophone words and translation of word + sliding window.
+    #TODO: sliding window + Write to file --> I want to search/view homophone representations!
     with open(source, "r", encoding="u8") as src, \
          open(translation, "r", encoding="u8") as trans:
         src = src.readlines()
         trans = trans.readlines()
         for i in range(len(src)):
             src_line = src[i]
-            if " "+token+" " in src_line.lower():
-                print("THE HOMOPHONE IS:", token)
-                print(src_line.rstrip())
-                print(trans[i].rstrip())
-                print("\n")
+            if token in src_line:
+                for (j, k) in enumerate(src_line.split()):
+                    if token == k:
+                            alignment = get_alignment(i, j, alignment_file)
+                            print(alignment)
+                            try:
+                                trans_line = trans[i].split()
+                                translation = trans_line[alignment[1]]
+                                print("THE HOMOPHONE IS:", token)
+                                print("THE TRANSLATION IS:", translation)
+                                print("\n")
+                            except TypeError:
+                                #PRINT source and translation.
+                                #Fast align didn't align correctly.
+                                #Could also be due to poor ASR: I don't want to discard these cases! These interest me!
+                                print("ALIGNMENT NOT FOUND")
+                                print(src_line)
+                                print(trans_line)
+                                print("\n")
+                                break
 
 
 def main():
@@ -130,9 +170,9 @@ def main():
     source = PhonDicExtract(filename=source_mfa)
     source_dic = source.get_dictionary()
     source_homophones = get_multiple_pairings(source_dic)
-    print(len(get_multiple_pairings(source_dic)))
-    for key in source_homophones:
-        print(key, source_homophones[key])
+    # print(len(get_multiple_pairings(source_dic)))
+    # for key in source_homophones:
+    #     print(key, source_homophones[key])
 
     # 2. Generate phoneme representations by sentence.
     test_lc_en = "/home/user/staehli/master_thesis/homophone_analysis/mfa_input/test.lc.en"
@@ -141,10 +181,14 @@ def main():
     # 3. Search two homophone types in source/reference (sentence match).
     test_tc_en = "/home/user/staehli/master_thesis/data/MuST-C/test.tc.en"
     test_tc_ref_de = "/home/user/staehli/master_thesis/data/MuST-C/test.tc.de"
-    get_homophone_translations("knew", test_tc_en, test_tc_ref_de)
+    # get_homophone_translations("knew", test_tc_en, test_tc_ref_de)
     # get_homophone_translations("new", test_lc_en, test_lc_ref_de)
 
     # 4. Search two homophone types in source/reference (word alignment).
+    alignment_file = "/home/user/staehli/master_thesis/homophone_analysis/alignments/forward.lc.src-ref.align"
+    # get_alignment(0, 1, alignment_file)
+    get_homophone_translations("knew", test_tc_en, test_tc_ref_de, alignment_file)
+
 
     # TODO: import extract homophones and check how many times each
     # homophone type appears in test data.
