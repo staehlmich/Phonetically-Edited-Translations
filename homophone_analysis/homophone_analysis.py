@@ -10,6 +10,7 @@ from collections import Counter
 import string
 # import Levenshtein
 from phoneme_dictionary_extract import PhonDicExtract
+import csv
 
 
 def get_multiple_pairings(dic: dict) -> dict:
@@ -115,21 +116,22 @@ def get_alignment(sent_id: int, word_id: int, alignment_file: str) -> list:
                     if j[0] == word_id:
                         return j
 
-def get_homophone_translations(token, source, translation, alignment_file):
+def get_homophone_translations(token:str, source:str, translation:str, alignment_file:str) -> Iterator:
     """
     Function that opens a source and reference/target file of aligned
     sentences and prints sentences that contains token on source side.
-    @param token:
-    @param source:
-    @param translation:
-    @return:
+    @param token: homophone (grapheme strings).
+    @param source: Path to source file (grapheme strings).
+    @param translation: Path reference/target file (grapheme strings).
+    @param alignment_file: Path to fast_align alignment file.
+    @return: yields tuples containing: (sent_id, word_id_source, source_token, trans_token, trans_align)
     """
     #STEPS:
     #1. Iterate over files in parallel
     #2. Find homophone string in source.
     #3. Helper function that retrieves alignment for sent_id/word_id --> string to list --> list to dictionary
-    #4. Print searched homophone words and translation of word + sliding window.
-    #TODO: sliding window + Write to file --> I want to search/view homophone representations!
+    #TODO: 4. sliding window --> I want to search/view homophone representations!
+
     with open(source, "r", encoding="u8") as src, \
          open(translation, "r", encoding="u8") as trans:
         src = src.readlines()
@@ -138,24 +140,35 @@ def get_homophone_translations(token, source, translation, alignment_file):
             src_line = src[i]
             if token in src_line:
                 for (j, k) in enumerate(src_line.split()):
-                    if token == k:
+                    if token.lower() == k.lower():
                             alignment = get_alignment(i, j, alignment_file)
-                            print(alignment)
                             try:
                                 trans_line = trans[i].split()
                                 translation = trans_line[alignment[1]]
-                                print("THE HOMOPHONE IS:", token)
-                                print("THE TRANSLATION IS:", translation)
-                                print("\n")
+                                yield (i+1, j+1, k, translation, alignment[0]+1)
+                            #Fast align didn't align anything to token.
                             except TypeError:
-                                #PRINT source and translation.
-                                #Fast align didn't align correctly.
                                 #Could also be due to poor ASR: I don't want to discard these cases! These interest me!
-                                print("ALIGNMENT NOT FOUND")
-                                print(src_line)
-                                print(trans_line)
-                                print("\n")
-                                break
+                                yield (i+1, j+1, k, "NA", 0)
+
+def write_homophone_translations(pdict:dict, source:str, translation:str, alignment_file:str, output:str):
+    """
+    Function that writes translations of homophones to .csv file.
+    @param pdict: dictionary of homophones (as in output of get_multiple_pairings)
+    @param source: Path to source file (grapheme strings).
+    @param translation: Path reference/target file (grapheme strings).
+    @param alignment_file: Path to fast_align alignment file.
+    @param output: Path to output .csv file.
+    @return:
+    """
+    with open(output, "w", encoding="utf-8") as outfile:
+        writer = csv.writer(outfile, delimiter=" ")
+        writer.writerow(["sent_id", "word_id", "source_phon", "source_token", "trans_token", "trans_align"])
+        for key in pdict:
+            #TODO: sort homophone strings alphabetically (dict keys always change order)
+            for value in pdict[key]:
+                for elem in get_homophone_translations(value, source, translation, alignment_file):
+                    writer.writerow([elem[0], elem[1], key, elem[2], elem[3], elem[4]])
 
 
 def main():
@@ -178,17 +191,30 @@ def main():
     test_lc_en = "/home/user/staehli/master_thesis/homophone_analysis/mfa_input/test.lc.en"
     # grapheme_to_phoneme(source_dic, test_lc_en, "test.ph.en", concat=True)
 
-    # 3. Search two homophone types in source/reference (sentence match).
+    # 3a. Search all homophone types in source/reference (word alignment),
+    # and write them to .csv file.
     test_tc_en = "/home/user/staehli/master_thesis/data/MuST-C/test.tc.en"
     test_tc_ref_de = "/home/user/staehli/master_thesis/data/MuST-C/test.tc.de"
-    # get_homophone_translations("knew", test_tc_en, test_tc_ref_de)
-    # get_homophone_translations("new", test_lc_en, test_lc_ref_de)
+    alignment_ref = "/home/user/staehli/master_thesis/homophone_analysis/alignments/forward.lc.src-ref.align"
+    # get_homophone_translations("right", test_tc_en, test_tc_ref_de, alignment_ref)
+    write_homophone_translations(source_homophones, test_tc_en, test_tc_ref_de, alignment_ref, "src-ref.homophones.csv")
+    # print(source_dic)
+    # print(source_homophones)
 
-    # 4. Search two homophone types in source/reference (word alignment).
-    alignment_file = "/home/user/staehli/master_thesis/homophone_analysis/alignments/forward.lc.src-ref.align"
-    # get_alignment(0, 1, alignment_file)
-    get_homophone_translations("knew", test_tc_en, test_tc_ref_de, alignment_file)
+    # 3b. Search all homophone types in source/target (word alignment),
+    # and write them to .csv file.
+    test_tc_hyp_de = "/home/user/staehli/master_thesis/homophone_analysis/mfa_input/results.tc.txt"
+    alignment_hyp = "/home/user/staehli/master_thesis/homophone_analysis/alignments/forward_src-trg.align"
+    # for elem in get_homophone_translations("write", test_tc_en, test_tc_hyp_de, alignment_hyp):
+    #     print(elem)
+    write_homophone_translations(source_homophones, test_tc_en,
+                                 test_tc_hyp_de, alignment_hyp,
+                                 "src-hyp.homophones.csv")
 
+    #TODO: Step 4 --> group .csv tables and show percentages of each translation for ref/hyp with pandas.
+    # Maybe also include POS tags?
+
+    #TODO: Step 5 --> search for homophones over word boundaries. 
 
     # TODO: import extract homophones and check how many times each
     # homophone type appears in test data.
