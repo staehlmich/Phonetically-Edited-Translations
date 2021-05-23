@@ -1,18 +1,18 @@
 #! /bin/bash
 
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=0
 
 data=/home/user/staehli/master_thesis/data/MuST-C
 zero=/home/user/staehli/master_thesis/zero
 moses=mosesdecoder
 
 # average last 5 checkpoints
-python3 ${zero}/scripts/checkpoint_averaging.py --path /home/user/staehli/master_thesis/zero/checkpoints/afs-tf --output /home/user/staehli/master_thesis/zero/checkpoints/ --checkpoints 5 --gpu 3
+python3 $zero/scripts/checkpoint_averaging.py --path /home/user/staehli/master_thesis/zero/checkpoints/afs-tf --output /home/user/staehli/master_thesis/zero/checkpoints/ --checkpoints 5 --gpu 0
 
 # to perform decoding for AFS models
 # remember to adjust enable_afs_t, enable_afs_f, and model_name
 
-python3 ${zero}/run.py --mode test --parameters=hidden_size=512,embed_size=512,filter_size=2048,\
+python3 $zero/run.py --mode test --parameters=hidden_size=512,embed_size=512,filter_size=2048,\
 dropout=0.2,label_smooth=0.1,attention_dropout=0.1,relu_dropout=0.2,\
 max_len=2048,batch_size=80,eval_batch_size=5,\
 token_size=15000,batch_or_token='token',\
@@ -34,7 +34,7 @@ warmup_steps=4000,\
 lrate_strategy="noam",\
 epoches=5000,\
 update_cycle=36,\
-gpus=[3],\
+gpus=[0],\
 disp_freq=1,\
 eval_freq=2500,\
 save_freq=2500,\

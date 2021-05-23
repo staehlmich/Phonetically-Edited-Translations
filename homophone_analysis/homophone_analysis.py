@@ -11,6 +11,7 @@ import string
 # import Levenshtein
 from phoneme_dictionary_extract import PhonDicExtract
 import csv
+import pandas as pd
 
 
 def get_multiple_pairings(dic: dict) -> dict:
@@ -170,7 +171,6 @@ def write_homophone_translations(pdict:dict, source:str, translation:str, alignm
                 for elem in get_homophone_translations(value, source, translation, alignment_file):
                     writer.writerow([elem[0], elem[1], key, elem[2], elem[3], elem[4]])
 
-
 def main():
     # I want this to compare over word boundaries, but I don't know if this will work.
     # Try to match ngrams and use brevity penalty for longer sentences?
@@ -197,9 +197,8 @@ def main():
     test_tc_ref_de = "/home/user/staehli/master_thesis/data/MuST-C/test.tc.de"
     alignment_ref = "/home/user/staehli/master_thesis/homophone_analysis/alignments/forward.lc.src-ref.align"
     # get_homophone_translations("right", test_tc_en, test_tc_ref_de, alignment_ref)
-    write_homophone_translations(source_homophones, test_tc_en, test_tc_ref_de, alignment_ref, "src-ref.homophones.csv")
-    # print(source_dic)
-    # print(source_homophones)
+    # write_homophone_translations(source_homophones, test_tc_en, test_tc_ref_de, alignment_ref, "src-ref.homophones.csv")
+
 
     # 3b. Search all homophone types in source/target (word alignment),
     # and write them to .csv file.
@@ -207,14 +206,21 @@ def main():
     alignment_hyp = "/home/user/staehli/master_thesis/homophone_analysis/alignments/forward_src-trg.align"
     # for elem in get_homophone_translations("write", test_tc_en, test_tc_hyp_de, alignment_hyp):
     #     print(elem)
-    write_homophone_translations(source_homophones, test_tc_en,
-                                 test_tc_hyp_de, alignment_hyp,
-                                 "src-hyp.homophones.csv")
+    # write_homophone_translations(source_homophones, test_tc_en,
+    #                              test_tc_hyp_de, alignment_hyp,
+    #                              "src-hyp.homophones.csv")
 
     #TODO: Step 4 --> group .csv tables and show percentages of each translation for ref/hyp with pandas.
     # Maybe also include POS tags?
-
-    #TODO: Step 5 --> search for homophones over word boundaries. 
+    hyp_df = pd.read_csv("src-hyp.homophones.csv", delimiter=" ")
+    hyp_counts = hyp_df.drop(["sent_id", "word_id", "trans_align"], axis=1)
+    hyp_counts = hyp_counts.fillna("not_aligned")
+    group = hyp_counts.groupby(["source_phon","source_token", "trans_token"]).agg({"trans_token":"count"})
+    group.columns = ["counts"]
+    #TODO: Show more than top5 translations per group.
+    group = group.sort_values(["source_phon","source_token", "counts"], ascending=False).groupby("counts").head(5)
+    group.to_csv("src-hyp.grouped.csv")
+    #TODO: Step 5 --> search for homophones over word boundaries.
 
     # TODO: import extract homophones and check how many times each
     # homophone type appears in test data.
