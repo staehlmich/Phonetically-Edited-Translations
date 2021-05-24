@@ -154,26 +154,27 @@ def main():
     source = PhonDicExtract(filename=source_mfa)
     source_dic = source.get_dictionary()
     source_homophones = source.get_homophone_tuples(source_dic)
-    # print(get_multiple_pairings(source_dic))
-    for key in source_homophones:
-        print(key, source_homophones[key])
+    # for key in source_homophones:
+    #     print(key, source_homophones[key])
 
-    # 2. Generate phoneme representations by sentence.
-    test_lc_en = "/home/user/staehli/master_thesis/homophone_analysis/mfa_input/test.lc.en"
+    # 2. Generate phoneme representations by sentence (source side).
+    # test_lc_en = "/home/user/staehli/master_thesis/homophone_analysis/mfa_input/test.lc.en"
     # grapheme_to_phoneme(source_dic, test_lc_en, "test.ph.en", concat=True)
 
-    # 3a. Search all homophone types in source/reference (word alignment),
-    # and write them to .csv file.
+    # 3. Frequencies of homophones by grapheme type in test data (source)
     test_tc_en = "/home/user/staehli/master_thesis/data/MuST-C/test.tc.en"
+    source_counts = source.search_homophone_counts(source_homophones,test_tc_en)
+    source_counts = source_counts.groupby(["phone_type", "graph_types", "graph_type"])["graph_type"].count().reset_index(name="count")
+    source_counts.to_csv("src.counts.csv")
+
+    # 4a. Search all homophone types in source/reference (word alignment),
+    # and write them to .csv file.
     test_tc_ref_de = "/home/user/staehli/master_thesis/data/MuST-C/test.tc.de"
     alignment_ref = "/home/user/staehli/master_thesis/homophone_analysis/alignments/forward.lc.src-ref.align"
     # get_homophone_translations("right", test_tc_en, test_tc_ref_de, alignment_ref)
     # write_homophone_translations(source_homophones, test_tc_en, test_tc_ref_de, alignment_ref, "src-ref.homophones.csv")
 
-    # TODO: import extract homophones and check how many times each
-    # homophone type appears in test data.
-
-    # 3b. Search all homophone types in source/target (word alignment),
+    # 4b. Search all homophone types in source/target (word alignment),
     # and write them to .csv file.
     test_tc_hyp_de = "/home/user/staehli/master_thesis/homophone_analysis/mfa_input/results.tc.txt"
     alignment_hyp = "/home/user/staehli/master_thesis/homophone_analysis/alignments/forward_src-trg.align"
@@ -181,10 +182,7 @@ def main():
     #                              test_tc_hyp_de, alignment_hyp,
     #                              "src-hyp.homophones.csv")
 
-    # TODO: import extract homophones and check how many times each
-    # homophone type appears in test data.
-
-    # Step 4a:  group .csv tables and show counts/percentages of each translation for ref/hyp with pandas.
+    # Step 5a. group .csv tables and show counts/percentages of each translation for ref/hyp with pandas.
     # TODO: Maybe also include POS tags?
 
     ref_df = pd.read_csv("src-ref.homophones.csv", delimiter=" ")
@@ -195,7 +193,7 @@ def main():
     group_refs = group_refs.sort_values(["source_phon", "source_token", "counts"], ascending=False).groupby(["source_phon", "source_token"]).head(5)
     # group_refs.to_csv("src-ref.grouped.csv")
 
-    #Step 4b:  group .csv tables and show counts/percentages of each translation for ref/hyp with pandas.
+    # Step 5b. group .csv tables and show counts/percentages of each translation for ref/hyp with pandas.
     #TODO: Maybe also include POS tags?
     hyp_df = pd.read_csv("src-hyp.homophones.csv", delimiter=" ")
     hyp_counts = hyp_df.drop(["sent_id", "word_id", "trans_align"], axis=1)
@@ -206,7 +204,12 @@ def main():
     group_hyp = group_hyp.sort_values(["source_phon","source_token","counts"], ascending=False).groupby(["source_phon","source_token"]).head(5)
     # group_hyp.to_csv("src-hyp.grouped.csv")
 
-    #TODO: Step 5 --> search for homophones over word boundaries.
+    #TODO: Step 6 --> search for homophones over word boundaries / filters
+    #Define own class for 6a through 6c?
+    #6a. phonetic type + n-phones. --> regex?
+    #6b. phonetic type + n edits (Substitution, insertion, deletion) --> Levenshtein distance.
+    #6c = 6a+6b.
+    #6d. Translation hypothesis: n-tokens --> source alignment?
 
 
 

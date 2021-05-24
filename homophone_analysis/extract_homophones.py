@@ -78,6 +78,9 @@ def main():
     hphones = HomExt("english-homophones.txt", "/home/user/staehli/master_thesis/data/MuST-C/test.tc.en")
     stats = hphones.get_stats()
 
+    #Using list of homophones is not great! A lot of tuples won't appear in
+    #the data or only one type in the tuple will appear (function words).
+
     # Questions for data:
     # 1. Which are the 100 most common homophone tuples?
     print(stats["Homophone_Tuple"].value_counts()[0:50])

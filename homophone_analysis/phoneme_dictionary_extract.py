@@ -6,8 +6,9 @@ import argparse
 import typing
 from typing import Iterator
 from itertools import chain
-from collections import Counter
+from collections import Counter, OrderedDict
 import string
+import pandas as pd
 
 class PhonDicExtract:
     """
@@ -37,7 +38,10 @@ class PhonDicExtract:
         mappings = {}
         for elem in self.__data_formatter__():
             mappings[elem[0]] = elem[1]
-        return mappings
+
+        # return as sorted OrderedDict, so sequence is the same and
+        # analysis easier.
+        return OrderedDict(sorted(mappings.items()))
 
     def get_homophone_tuples(self, dic: dict) -> dict:
         """
@@ -64,8 +68,36 @@ class PhonDicExtract:
                         multiples[value] = [key]
                     else:
                         multiples[value].append(key)
+        #return as sorted OrderedDict, so sequence is the same and
+        #analysis easier.
+        return OrderedDict(sorted(multiples.items()))
 
-        return multiples
+    def search_homophone_counts(self, phone_dic, searchfile):
+        """
+        Method that searches for homophones in test or training data and
+        adds them to dataframe.
+        @return: df with columns: [phone_type, graph_types, graph_type, sent_id, word_id]
+        """
+        counts = []
+        for phone_type in phone_dic:
+            for gtype in phone_dic[phone_type]:
+                with open(searchfile, "r", encoding="utf-8") as infile:
+                    # Initialize counter for sentence id.
+                    sent_id = 0
+                    for line in infile:
+                        sent_id += 1
+                        line = line.rstrip().split()
+                        #Use range function to get word_id.
+                        for i in range(len(line)):
+                            if line[i].lower() == gtype.lower():
+                                #convert graph_types to str to search in df.
+                                graph_types_str = " ".join(e for e in phone_dic[phone_type])
+                                #list with: [phone_type, graph_types,
+                                # graph_type, sent_id, word_id]
+                                match = [phone_type, graph_types_str, gtype, sent_id, i]
+                                counts.append(match)
+        return pd.DataFrame(counts, columns=["phone_type", "graph_types", "graph_type", "sent_id", "word_id"])
+
 
 def main():
     source_mfa = "/home/user/staehli/master_thesis/homophone_analysis/mfa_output/source_lower_dictionary"
