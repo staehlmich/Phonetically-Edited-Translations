@@ -80,7 +80,7 @@ def main():
 
     # Questions for data:
     # 1. Which are the 100 most common homophone tuples?
-    # print(stats["Homophone_Pair"].value_counts()[0:100])
+    print(stats["Homophone_Tuple"].value_counts()[0:50])
 
     # 2. Which tokens are the most frequent?
     # print(stats["Homophone"].value_counts()[0:100])

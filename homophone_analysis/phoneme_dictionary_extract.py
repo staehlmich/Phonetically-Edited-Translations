@@ -11,13 +11,10 @@ import string
 
 class PhonDicExtract:
     """
-    class to extract phonetic representations of types from a MFA output file.
+    Class to extract phonetic representations of types from a MFA output file.
     """
     def __init__(self, filename=""):
         self.__filename__ = filename
-        self.__mappings__ = dict()
-        self.__set_mappings__()
-        self.get_dictionary()
 
     def __data_formatter__(self) -> Iterator:
         """
@@ -30,21 +27,51 @@ class PhonDicExtract:
                 line = line.rstrip().split(maxsplit = 1)
                 yield line
 
-    def __set_mappings__(self):
-        #TO DO: list as value not needed, because MFA outputs 1 possible representation.
-        #Change values to type str in all methods!
+    def get_dictionary(self) -> dict:
+        """
+        Method that returns a dictionary with {grapheme string type: [phoneme string type1, phoneme string type2]}
+        @return:
+        """
+        # TODO: list as value not needed, because MFA outputs 1 possible representation.
+        # Change values to type str in all methods!
+        mappings = {}
         for elem in self.__data_formatter__():
-            self.__mappings__[elem[0]] = elem[1]
+            mappings[elem[0]] = elem[1]
+        return mappings
 
-    def get_dictionary(self):
-        return self.__mappings__
+    def get_homophone_tuples(self, dic: dict) -> dict:
+        """
+        Method that shows multiple mappings between grapheme and phoneme
+        strings.
+        @dic: dict {type: [phoneme string type1, phoneme string type2]}
+        @return: dictionary {phoneme string type: [type1, type2]}
+        """
+        # Solution by:
+        # https://www.geeksforgeeks.org/python-find-keys-with-duplicate-values-in-dictionary/
+        rev_dict = {}
+        multiples = dict()
+
+        for key, value in dic.items():
+            rev_dict.setdefault(value, set()).add(key)
+
+        result = set(chain.from_iterable(
+            values for key, values in rev_dict.items()
+            if len(values) > 1))
+        for r in result:
+            for key, value in dic.items():
+                if r == key:
+                    if value not in multiples:
+                        multiples[value] = [key]
+                    else:
+                        multiples[value].append(key)
+
+        return multiples
 
 def main():
     source_mfa = "/home/user/staehli/master_thesis/homophone_analysis/mfa_output/source_lower_dictionary"
     source = PhonDicExtract(filename=source_mfa)
     source_dic = source.get_dictionary()
-    source_homophones = get_multiple_pairings(source_dic)
-    print(len(get_multiple_pairings(source_dic)))
+    source_homophones = source.get_homophone_tuples(source_dic)
     for key in source_homophones:
         print(key, source_homophones[key])
 
