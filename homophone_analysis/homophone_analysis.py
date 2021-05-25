@@ -206,10 +206,22 @@ def main():
 
     #TODO: Step 6 --> search for homophones over word boundaries / filters
     #Define own class for 6a through 6c?
-    #6a. phonetic type + n-phones. --> regex?
+    #6a. phonetic type + n-phones. --> regex? --> good results (conjugation, suffixes)
     #6b. phonetic type + n edits (Substitution, insertion, deletion) --> Levenshtein distance.
+    #Search on token level. Condition: ommit endings (Verbs, nouns, ...). Cant change stresses/vowels. (Parameter).
+    #(Examples: "waved" vs. "waited", "set" vs. "sent", "glue" vs. "group", "play" vs. "place",
+    #Idea Rico: Work with phones that are similar in location of articulation
+    # --> MS: These categories might not be relevant for the system.
     #6c = 6a+6b.
     #6d. Translation hypothesis: n-tokens --> source alignment?
+
+    # I could use min function for my search algorithm!
+    # I should focus on homophone string on the source side. Matching to translations on the target side is hard!
+
+    #Search algorithm for similar words:
+    #Parameter: How many operations (S,I, D)
+    #1.
+    #2. Over word boundaries.
 
 
 

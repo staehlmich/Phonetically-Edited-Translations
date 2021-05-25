@@ -16,17 +16,30 @@
 import argparse
 import sys  ## module for command line arguments
 
-def display_alignment_tables(lang1_filename, lang2_filename, alignment_filename):
+def main():
+	parser = argparse.ArgumentParser()
+	parser.add_argument("source_filename", type=str,
+						help="Path to source file.")
+	parser.add_argument("target_filename", type=str,
+						help="Path to target file.")
+	parser.add_argument("alignment_filename", type=str,
+						help="Path to alignment file.")
+	parser.add_argument("-s", "--start", type=int,
+						help="The start line number in the alignment file.")
+	parser.add_argument("-n", "--number", type=int,
+						help="The number of tables to be created")
+	args = parser.parse_args()
+
 	#TODO: optional arguments
 	if len(sys.argv) > 4:
 		## the start line number in the alignment file
-		start_line_num = int(sys.argv[4])
+		start_line_num = int(args.start)
 	else:
 		start_line_num = 0
 
 	if len(sys.argv) > 5:
 		## the number of tables to be created
-		number_of_tables = int(sys.argv[5])
+		number_of_tables = int(args.number)
 	else:
 		## the number of alignment tables which shall be created by the program
 		number_of_tables = 10
@@ -34,13 +47,13 @@ def display_alignment_tables(lang1_filename, lang2_filename, alignment_filename)
 	#################################################################
 
 	## open the alignment file for reading
-	alignment_infile = open(alignment_filename, 'r')
+	alignment_infile = open(args.alignment_filename, 'r')
 
 	## open the language_1 file for reading
-	lang1_infile = open(lang1_filename, 'r')
+	lang1_infile = open(args.source_filename, 'r')
 
 	## open the language_2 file for reading
-	lang2_infile = open(lang2_filename, 'r')
+	lang2_infile = open(args.target_filename, 'r')
 
 	## counter for the number of alignment lines
 	line_count = 0
@@ -82,9 +95,9 @@ def display_alignment_tables(lang1_filename, lang2_filename, alignment_filename)
 	print('  <h2>Word Alignments</h2>')
 	print('  <p>Input files:</p>')
 	print('  <ol>')
-	print('    <li>', lang1_filename, '</li>')
-	print('    <li>', lang2_filename, '</li>')
-	print('    <li>', alignment_filename, '</li>')
+	print('    <li>', lang1_infile, '</li>')
+	print('    <li>', lang2_infile, '</li>')
+	print('    <li>', alignment_infile, '</li>')
 	print('  </ol>')
 
 	## for each line in the alignment file
@@ -185,17 +198,9 @@ def display_alignment_tables(lang1_filename, lang2_filename, alignment_filename)
 
 ###############################
 
-def main():
-	parser = argparse.ArgumentParser()
-	parser.add_argument("source_filename", type=str, help="Path to source file.")
-	parser.add_argument("target_filename", type=str, help="Path to target file.")
-	parser.add_argument("alignment_filename", type=str, help="Path to alignment file.")
-	parser.add_argument("-l", "--start-line", type=int, help="The start line number in the alignment file.")
-	parser.add_argument("-n", "--number-tables", type=int, help="The number of tables to be created")
-	args = parser.parse_args()
-
 	# python3 display_alignment_tables.py "/home/user/staehli/master_thesis/data/MuST-C/test.tc.en" "/home/user/staehli/master_thesis/data/MuST-C/test.tc.de" "/home/user/staehli/master_thesis/homophone_analysis/alignments/forward_src-ref.align"
 
-	display_alignment_tables(args.source_filename, args.target_filename, args.alignment_filename)
+	# python3 display_alignment_tables.py "/home/user/staehli/master_thesis/data/MuST-C/test.tc.en" "/home/user/staehli/master_thesis/homophone_analysis/alignments/trans.tok.txt" "/home/user/staehli/master_thesis/homophone_analysis/alignments/forward_src-trg.align" -l 57 -n 1
+
 if __name__ == "__main__":
 	main()
