@@ -12,6 +12,7 @@ import string
 from phoneme_dictionary_extract import PhonDicExtract
 import csv
 import pandas as pd
+from nltk import ngrams
 
 def grapheme_to_phoneme(pronunciation_dic:dict, input_file: str,  output_file:str, concat= False):
     """
@@ -142,6 +143,25 @@ def write_homophone_translations(pdict:dict, source:str, translation:str, alignm
                 for elem in get_homophone_translations(value, source, translation, alignment_file):
                     writer.writerow([elem[0], elem[1], key, elem[2], elem[3], elem[4]])
 
+#Could include these functions in phoneme dictionary class.
+def return_ngrams(line:str, n:int):
+    line = line.translate(str.maketrans('', '', string.punctuation))
+    return [ngram for ngram in ngrams(line.rstrip().split(), n)]
+
+def find_homophones(hphone_dic:dict, grams: list):
+    for gram in grams:
+        phone_str = "".join(e for e in gram)
+        for key in hphone_dic:
+            #Remove whitespaces from dictionary
+            joined_key = ''.join(key.split())
+            if joined_key not in gram[0]:
+                if joined_key not in gram[1]:
+                    if joined_key in phone_str:
+                        print(gram, joined_key, hphone_dic[key])
+
+
+
+
 def main():
     # I want this to compare over word boundaries, but I don't know if this will work.
     # Try to match ngrams and use brevity penalty for longer sentences?
@@ -162,10 +182,10 @@ def main():
     # grapheme_to_phoneme(source_dic, test_lc_en, "test.ph.en", concat=True)
 
     # 3. Frequencies of homophones by grapheme type in test data (source)
-    test_tc_en = "/home/user/staehli/master_thesis/data/MuST-C/test.tc.en"
-    source_counts = source.search_homophone_counts(source_homophones,test_tc_en)
-    source_counts = source_counts.groupby(["phone_type", "graph_types", "graph_type"])["graph_type"].count().reset_index(name="count")
-    source_counts.to_csv("src.counts.csv")
+    # test_tc_en = "/home/user/staehli/master_thesis/data/MuST-C/test.tc.en"
+    # source_counts = source.search_homophone_counts(source_homophones,test_tc_en)
+    # source_counts = source_counts.groupby(["phone_type", "graph_types", "graph_type"])["graph_type"].count().reset_index(name="count")
+    # source_counts.to_csv("src.counts.csv")
 
     # 4a. Search all homophone types in source/reference (word alignment),
     # and write them to .csv file.
@@ -184,29 +204,30 @@ def main():
 
     # Step 5a. group .csv tables and show counts/percentages of each translation for ref/hyp with pandas.
     # TODO: Maybe also include POS tags?
-
-    ref_df = pd.read_csv("src-ref.homophones.csv", delimiter=" ")
-    ref_counts = ref_df.drop(["sent_id", "word_id", "trans_align"], axis=1).fillna("not_aligned")
-    group_refs = ref_counts.groupby(["source_phon","source_token", "trans_token"]).agg({"trans_token":"count"})
-    group_refs.columns = ["counts"]
+    # ref_df = pd.read_csv("src-ref.homophones.csv", delimiter=" ")
+    # ref_counts = ref_df.drop(["sent_id", "word_id", "trans_align"], axis=1).fillna("not_aligned")
+    # group_refs = ref_counts.groupby(["source_phon","source_token", "trans_token"]).agg({"trans_token":"count"})
+    # group_refs.columns = ["counts"]
     # Write top 5 translations per group to file.
-    group_refs = group_refs.sort_values(["source_phon", "source_token", "counts"], ascending=False).groupby(["source_phon", "source_token"]).head(5)
+    # group_refs = group_refs.sort_values(["source_phon", "source_token", "counts"], ascending=False).groupby(["source_phon", "source_token"]).head(5)
     # group_refs.to_csv("src-ref.grouped.csv")
 
     # Step 5b. group .csv tables and show counts/percentages of each translation for ref/hyp with pandas.
     #TODO: Maybe also include POS tags?
-    hyp_df = pd.read_csv("src-hyp.homophones.csv", delimiter=" ")
-    hyp_counts = hyp_df.drop(["sent_id", "word_id", "trans_align"], axis=1)
-    hyp_counts = hyp_counts.fillna("not_aligned")
-    group_hyp = hyp_counts.groupby(["source_phon","source_token", "trans_token"]).agg({"trans_token":"count"})
-    group_hyp.columns = ["counts"]
-    #Write top 5 translations per group to file.
-    group_hyp = group_hyp.sort_values(["source_phon","source_token","counts"], ascending=False).groupby(["source_phon","source_token"]).head(5)
-    # group_hyp.to_csv("src-hyp.grouped.csv")
+    # hyp_df = pd.read_csv("src-hyp.homophones.csv", delimiter=" ")
+    # hyp_counts = hyp_df.drop(["sent_id", "word_id", "trans_align"], axis=1)
+    # hyp_counts = hyp_counts.fillna("not_aligned")
+    # group_hyp = hyp_counts.groupby(["source_phon","source_token", "trans_token"]).agg({"trans_token":"count"})
+    # group_hyp.columns = ["counts"]
+    # #Write top 5 translations per group to file.
+    # group_hyp = group_hyp.sort_values(["source_phon","source_token","counts"], ascending=False).groupby(["source_phon","source_token"]).head(5)
+    # # group_hyp.to_csv("src-hyp.grouped.csv")
 
     #TODO: Step 6 --> search for homophones over word boundaries / filters
     #Define own class for 6a through 6c?
     #6a. phonetic type + n-phones. --> regex? --> good results (conjugation, suffixes)
+    # I could use min function for my search algorithm!
+    # Parameter: How many operations (S,I, D)
     #6b. phonetic type + n edits (Substitution, insertion, deletion) --> Levenshtein distance.
     #Search on token level. Condition: ommit endings (Verbs, nouns, ...). Cant change stresses/vowels. (Parameter).
     #(Examples: "waved" vs. "waited", "set" vs. "sent", "glue" vs. "group", "play" vs. "place",
@@ -215,14 +236,19 @@ def main():
     #6c = 6a+6b.
     #6d. Translation hypothesis: n-tokens --> source alignment?
 
-    # I could use min function for my search algorithm!
+    #6e. Over word boundaries.
+    # example = "BAE1K IH0N NUW1 YAO1RK , AY1 AH0M TH HHEH1D AA1F DIH0VEH1LAH0PMAH0NT FAO1R AH0 NAA0N @-@ PRAA1FIH0T KAO1LD RAA1BIH0N HHUH2D ."
+    # example_bigrams = return_ngrams(example, 2)
+    # find_homophones(source_homophones, example_bigrams)
+    with open("test.ph.en", "r", encoding="utf-8") as infile:
+        for line in infile:
+            bigrams = return_ngrams(line,2)
+            find_homophones(source_homophones, bigrams)
+    #TODO: print out grapheme representations of everything --> lookup with original file.
+
+    #Compare this result against working only with grapheme strings!
+
     # I should focus on homophone string on the source side. Matching to translations on the target side is hard!
-
-    #Search algorithm for similar words:
-    #Parameter: How many operations (S,I, D)
-    #1.
-    #2. Over word boundaries.
-
 
 
 if __name__ == "__main__":
