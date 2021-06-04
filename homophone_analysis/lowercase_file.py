@@ -16,15 +16,15 @@ def lowercase_file(input_file, output_file):
 
 def main():
     # path = "/home/user/staehli/master_thesis/data/MuST-C/en-de/data/train/txt/"
-    outpath = "/home/user/staehli/master_thesis/homophone_analysis/mfa_input/"
+    outpath = "/home/user/staehli/master_thesis/homophone_analysis/moses_experiments/corpus/"
     # train_en = path+"train.en"
     # train_de = path+"train.de"
     # train_lc_en = outpath+"train.lc.en"
     # train_lc_de = outpath+"train.lc.de"
     # lowercase_file(train_en, train_lc_en)
     # lowercase_file(train_de, train_lc_de)
-    test_source = "/home/user/staehli/master_thesis/data/MuST-C/en-de/data/train/txt/train.en"
-    lowercase_file(test_source, outpath+"train.lc.en")
+    filepath = "/home/user/staehli/master_thesis/data/MuST-C/train.tok.de"
+    lowercase_file(filepath, outpath+"train.lc.de")
 
 if __name__ == "__main__":
     main()
