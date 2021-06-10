@@ -103,15 +103,30 @@ def vocab_to_dictionary(vocab_file: str, full_dic: dict, mfa_dic: dict) -> dict:
 
     return phon_dic
 
-def grapheme_to_phoneme(pronunciation_dic:dict, input_file: str,  output_file:str, concat= False):
+def replace_special_chars(special_char: str):
+    """
+    Helper function to replace special characters from moses tokenizer.
+    @param special_char:
+    @return:
+    """
+    #TODO as list, change search direction and keep mosees tag.
+    special_chars = {"&amp;": "&", "&#124;": "|", "&lt;": "<", "&gt;": ">",
+                     "&apos;": "'", "&quot;": '"', "&#91;": "[","&#93;": "]" }
+    if special_char in special_chars:
+        return special_chars[special_char]
+    else:
+        return None
+
+def grapheme_to_phoneme(pronunciation_dic:dict, input_file: str,  output_file:str):
     """
     Function that takes a test or training file (1 sentence per line)
-    and converts graphemes of tokens into phoneme representation.
-    @param pronunciation_dic:
-    @param input_file: tokens as grapheme strings
-    @param output_file: tokens as phoneme strings
-    @param concat: If True, phonemes of tokens are concatenated
-    as string without spaces.
+    and converts graphemes tokens into phoneme tokens.
+    @param pronunciation_dic: Contains mapping of grapheme to phoneme tokens.
+    @param input_file: training file, 1 sentence per line.
+    @param output_file: file containing tokens as phoneme strings.
+    <PUNCT: !>: token is punctuation symbol.
+    <UNK: abc.com>: token has unknown phonetic representation.
+    <PHON: W IY>: phonetized token.
     @return:
     """
     with open(input_file, "r", encoding="utf-8") as infile, open(output_file, "w", encoding="utf-8") as outfile:
@@ -121,45 +136,38 @@ def grapheme_to_phoneme(pronunciation_dic:dict, input_file: str,  output_file:st
             # Other option is to use enumerate!
             for i in range(len(line)):
                 token = line[i].lower()
-                # Write EOS to file.
-                if i == len(line)-1:
-                    new_line = new_line + token +"\n"
-                # Write non EOS tokens to file.
+                # Write punctuation symbols to file.
+                if token in string.punctuation:
+                    new_line = new_line + "<PUNCT:{}>".format(token) + " "
+                # Look up phoneme representation of words and write to file.
                 else:
-                    # Write punctuation symbols to file.
-                    if token in string.punctuation:
-                        new_line = new_line + token + " "
-                    # Look up phoneme representation of words and write to file.
-                    else:
-                        if concat == False:
-                            try:
-                                #Token has no phonetic representation.
-                                if pronunciation_dic[token] == "<UNK>":
-                                    new_line = new_line + \
-                                               "<UNK:{}>".format(token) + " "
-                                else:
-                                    new_line = new_line + pronunciation_dic[token]+" "
-                            # Special characters
-                            except KeyError:
+                    try:
+                        if pronunciation_dic[token] == "<UNK>":
+                            # Token was tokenized as special char by moses.
+                            special_char = replace_special_chars(token)
+                            if special_char != None:
+                                new_line + "<PUNCT:{}>".format(
+                                    special_char) + " "
+                            # Token has no phonetic representation.
+                            else:
                                 new_line = new_line + \
-                                           "<UNK:{}>".format(
-                                               token) + " "
+                                       "<UNK:{}>".format(token) + " "
                         else:
-                            try:
-                                #Token has no phonetic representation.
-                                if pronunciation_dic[token] == "<UNK>":
-                                    new_line = new_line + \
-                                               "<UNK:{}>".format(
-                                                   token) + " "
-                                else:
-                                    phone_tok = pronunciation_dic[token].replace(" ", "")
-                                    new_line = new_line + phone_tok+" "
-                            #Special characters
-                            except KeyError:
-                                new_line = new_line + \
-                                           "<UNK:{}>".format(
-                                               token) + " "
-            outfile.write(new_line)
+                            new_line = new_line + "<PHON:{}>".format(pronunciation_dic[token])+" "
+                    # Special characters
+                    except KeyError:
+                        #Token was tokenized as special char by moses.
+                        special_char = replace_special_chars(token)
+                        if special_char != None:
+                            new_line + "<PUNCT:{}>".format(special_char) + " "
+                        # Token has no phonetic representation.
+                        else:
+                            new_line = new_line + \
+                                   "<UNK:{}>".format(
+                                       token) + " "
+            #Write line and newline char to outfile.
+            # [:-1] to avoid writing last whitespace
+            outfile.write(new_line[:-1]+"\n")
 
 def get_arpabet() -> list:
     """

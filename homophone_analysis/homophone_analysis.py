@@ -144,15 +144,15 @@ def main():
     full_dic = pde.get_dictionary(path_full_dic)
     #Phonetized vocabulary
     vocab_phon = pde.vocab_to_dictionary(phrases_vocab, full_dic, train_mfa_dic)
-    #Homophones in train data
-    homophones_en = pde.get_homophone_tuples(vocab_phon)
+    #Homophones in train data. TODO: Write this to file, because programm runs slow.
+    # homophones_en = pde.get_homophone_tuples(vocab_phon)
     #Dictionary as dataframe.
     # train_dataframe_en = pd.DataFrame(homophones_en.items(), columns=["phoneme type", "grapheme type"])
     # train_dataframe_en.to_csv("train.en.freq.csv")
 
     # 2. Generate phoneme representations by sentence and write to file (source side).
-    # train_phrases = "/home/user/staehli/master_thesis/homophone_analysis/phrases.en"
-    # pde.grapheme_to_phoneme(vocab_phon, train_phrases, "phrases.ph.en", concat=True)
+    train_phrases = "/home/user/staehli/master_thesis/homophone_analysis/phrases.en"
+    pde.grapheme_to_phoneme(vocab_phon, train_phrases, "phrases.ph.en")
 
     # 3. Frequencies of homophones by grapheme type in train data (source)
     # train_tc_en = "/home/user/staehli/master_thesis/data/MuST-C/train.tc.en"
@@ -162,20 +162,21 @@ def main():
 
     #Find homophones over token boundaries and close phonetic matches.
 
-    # example = "BAE1K IH0N NUW1 YAO1RK , AY1 AH0M TH HHEH1D AA1F DIH0VEH1LAH0PMAH0NT FAO1R AH0 NAA0N @-@ PRAA1FIH0T KAO1LD RAA1BIH0N HHUH2D ."
-    # example_bigrams = return_ngrams(example, 2)
+    example = "BAE1K IH0N NUW1 YAO1RK , AY1 AH0M TH HHEH1D AA1F DIH0VEH1LAH0PMAH0NT FAO1R AH0 NAA0N @-@ PRAA1FIH0T KAO1LD RAA1BIH0N HHUH2D ."
+    example_bigrams = return_ngrams(example, 2)
     # for elem in find_homophones(homophones_en, example_bigrams):
     #     print(elem)
-    with open("phrases.ph.en", "r", encoding="utf-8") as infile:
-        counter = 0
-        phon_strings = []
-        for line in infile:
-            bigrams = return_ngrams(line,2)
-            for e in find_homophones(homophones_en, bigrams):
-                phon_strings.append(e)
-                counter +=1
-                print(e)
-        print(len(phon_strings))
+    # print(train_mfa_dic["zubin"])
+    # with open("phrases.ph.en", "r", encoding="utf-8") as infile:
+    #     counter = 0
+    #     phon_strings = []
+    #     for line in infile:
+    #         bigrams = return_ngrams(line,2)
+    #         for e in find_homophones(homophones_en, bigrams):
+    #             phon_strings.append(e)
+    #             counter +=1
+    #             print(e)
+    #     print(len(phon_strings))
 
     # 5. Find errors in test data
 
