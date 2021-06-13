@@ -151,7 +151,7 @@ def main():
     # train_dataframe_en.to_csv("train.en.freq.csv")
 
     # 2. Generate phoneme representations by sentence and write to file (source side).
-    train_phrases = "/home/user/staehli/master_thesis/homophone_analysis/phrases.en"
+    train_phrases = "/home/user/staehli/master_thesis/homophone_analysis/phrases.short.en"
     pde.grapheme_to_phoneme(vocab_phon, train_phrases, "phrases.ph.en")
 
     # 3. Frequencies of homophones by grapheme type in train data (source)
@@ -162,8 +162,8 @@ def main():
 
     #Find homophones over token boundaries and close phonetic matches.
 
-    example = "BAE1K IH0N NUW1 YAO1RK , AY1 AH0M TH HHEH1D AA1F DIH0VEH1LAH0PMAH0NT FAO1R AH0 NAA0N @-@ PRAA1FIH0T KAO1LD RAA1BIH0N HHUH2D ."
-    example_bigrams = return_ngrams(example, 2)
+    # example = "BAE1K IH0N NUW1 YAO1RK , AY1 AH0M TH HHEH1D AA1F DIH0VEH1LAH0PMAH0NT FAO1R AH0 NAA0N @-@ PRAA1FIH0T KAO1LD RAA1BIH0N HHUH2D ."
+    # example_bigrams = return_ngrams(example, 2)
     # for elem in find_homophones(homophones_en, example_bigrams):
     #     print(elem)
     # print(train_mfa_dic["zubin"])

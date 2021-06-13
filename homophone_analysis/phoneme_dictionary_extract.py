@@ -9,6 +9,7 @@ from itertools import chain
 from collections import Counter, OrderedDict
 import string
 import pandas as pd
+import re
 
 """
 Functions to extract and generate phonetic string representations of files.
@@ -103,20 +104,6 @@ def vocab_to_dictionary(vocab_file: str, full_dic: dict, mfa_dic: dict) -> dict:
 
     return phon_dic
 
-def replace_special_chars(special_char: str):
-    """
-    Helper function to replace special characters from moses tokenizer.
-    @param special_char:
-    @return:
-    """
-    #TODO as list, change search direction and keep mosees tag.
-    special_chars = {"&amp;": "&", "&#124;": "|", "&lt;": "<", "&gt;": ">",
-                     "&apos;": "'", "&quot;": '"', "&#91;": "[","&#93;": "]" }
-    if special_char in special_chars:
-        return special_chars[special_char]
-    else:
-        return None
-
 def grapheme_to_phoneme(pronunciation_dic:dict, input_file: str,  output_file:str):
     """
     Function that takes a test or training file (1 sentence per line)
@@ -132,18 +119,19 @@ def grapheme_to_phoneme(pronunciation_dic:dict, input_file: str,  output_file:st
     with open(input_file, "r", encoding="utf-8") as infile, open(output_file, "w", encoding="utf-8") as outfile:
         for line in infile:
             line = line.rstrip().split()
+            #Add tokens to phonetized line.
             new_line = ""
             # Other option is to use enumerate!
-            for i in range(len(line)):
-                token = line[i].lower()
-                # Write punctuation symbols to file.
-                if token in string.punctuation:
+            for token in line:
+                # Add punctuation symbols to file.
+                if token.lower() in string.punctuation:
                     new_line = new_line + "<PUNCT:{}>".format(token) + " "
                 # Look up phoneme representation of words and write to file.
                 else:
                     try:
-                        if pronunciation_dic[token] == "<UNK>":
+                        if pronunciation_dic[token.lower()] == "<UNK>":
                             # Token was tokenized as special char by moses.
+                            #TODO
                             special_char = replace_special_chars(token)
                             if special_char != None:
                                 new_line + "<PUNCT:{}>".format(
@@ -153,7 +141,7 @@ def grapheme_to_phoneme(pronunciation_dic:dict, input_file: str,  output_file:st
                                 new_line = new_line + \
                                        "<UNK:{}>".format(token) + " "
                         else:
-                            new_line = new_line + "<PHON:{}>".format(pronunciation_dic[token])+" "
+                            new_line = new_line + "<PHON:{}>".format(pronunciation_dic[token.lower()])+" "
                     # Special characters
                     except KeyError:
                         #Token was tokenized as special char by moses.
