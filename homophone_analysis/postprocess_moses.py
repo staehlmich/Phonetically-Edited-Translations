@@ -7,25 +7,6 @@ import string
 
 """Script to format output of moses phrase table to train with MFA."""
 
-def find_substrings(s: str, l: list):
-    """
-    Helper function to find substrings of strings in list
-    @param s: search string
-    @param l: list containing string
-    @return: bool
-    """
-    substring = False
-    if s in l:
-        substring = True
-        return substring
-    for elem in l:
-        if s in elem:
-            substring = True
-            return substring
-        else:
-            pass
-    return substring
-
 def remove_punct(text: str) -> str:
     """
     Helper function to remove all punctuation from string.
@@ -116,12 +97,10 @@ def filter_table(table_path:str, filename_source:str, filename_target:str, n:int
                         previous_phrase = key
 
 def main():
-    # phrase_table_path = "/home/user/staehli/master_thesis/homophone_analysis/moses_experiments/model/phrase-table.detok.short"
     phrase_table_path = "/home/user/staehli/master_thesis/homophone_analysis/moses_experiments/model/phrase-table.detok"
 
     #Open moses phrase table from step 6.
     filter_table(phrase_table_path, "phrases2.en", "phrases2.de", 3)
-    # s = "they're"
-    # print(remove_punct(s))
+
 if __name__ == "__main__":
     main()
