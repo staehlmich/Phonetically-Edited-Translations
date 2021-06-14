@@ -15,32 +15,6 @@ import pandas as pd
 from nltk import ngrams
 
 
-def search_homophone_counts(phone_dic, searchfile):
-    """
-    Method that searches for homophones in test or training data and
-    adds them to dataframe.
-    @return: df with columns: [phone_type, graph_types, graph_type, sent_id, word_id]
-    """
-    counts = []
-    for phone_type in phone_dic:
-        for gtype in phone_dic[phone_type]:
-            with open(searchfile, "r", encoding="utf-8") as infile:
-                # Initialize counter for sentence id.
-                sent_id = 0
-                for line in infile:
-                    sent_id += 1
-                    line = line.rstrip().split()
-                    #Use range function to get word_id.
-                    for i in range(len(line)):
-                        if line[i].lower() == gtype.lower():
-                            #convert graph_types to str to search in df.
-                            graph_types_str = " ".join(e for e in phone_dic[phone_type])
-                            #list with: [phone_type, graph_types,
-                            # graph_type, sent_id, word_id]
-                            match = [phone_type, graph_types_str, gtype, sent_id, i]
-                            counts.append(match)
-    return pd.DataFrame(counts, columns=["phone_type", "graph_types", "graph_type", "sent_id", "word_id"])
-
 #Maybe delete this function. Output not very useful.
 def find_similar_types(iter1, iter2):
     similar_types = dict()
@@ -89,6 +63,32 @@ def get_homophone_translations(token:str, source:str, translation:str, alignment
                                 #Could also be due to poor ASR: I don't want to discard these cases! These interest me!
                                 yield (i+1, j+1, k, "NA", 0)
 
+def search_homophone_counts(phone_dic, searchfile):
+    """
+    Method that searches for homophones in test or training data and
+    adds them to dataframe.
+    @return: df with columns: [phone_type, graph_types, graph_type, sent_id, word_id]
+    """
+    counts = []
+    for phone_type in phone_dic:
+        for gtype in phone_dic[phone_type]:
+            with open(searchfile, "r", encoding="utf-8") as infile:
+                # Initialize counter for sentence id.
+                sent_id = 0
+                for line in infile:
+                    sent_id += 1
+                    line = line.rstrip().split()
+                    #Use range function to get word_id.
+                    for i in range(len(line)):
+                        if line[i].lower() == gtype.lower():
+                            #convert graph_types to str to search in df.
+                            graph_types_str = " ".join(e for e in phone_dic[phone_type])
+                            #list with: [phone_type, graph_types,
+                            # graph_type, sent_id, word_id]
+                            match = [phone_type, graph_types_str, gtype, sent_id, i]
+                            counts.append(match)
+    return pd.DataFrame(counts, columns=["phone_type", "graph_types", "graph_type", "sent_id", "word_id"])
+
 #Could include these functions in phoneme dictionary class.
 
 def return_ngrams(line:str, n:int):
@@ -125,34 +125,37 @@ def find_homophones(hphone_dic:dict, grams: list):
 # 3. Levenshtein: Find phonetically close tokens in ngram.
 # Different weights: stresses, close location!
 
-
-
 # ModifiedLev --> class super(Levenshtein))
 
 def main():
-    # I want this to compare over word boundaries, but I don't know if this will work.
-    # Try to match ngrams and use brevity penalty for longer sentences?
-    # Highlight overlaps in phones? How do I filter out garbage?
-    # How do I ensure high precision (and recall)?
+
     # Idea 19.4 --> Train BPE on dictionary and generate learned mappings?
 
     # 1. Extract phoneme string types (homophone types).
     path_mfa_dic = "/home/user/staehli/master_thesis/homophone_analysis/mfa_output/phrases_dic.mfa"
     path_full_dic = "/home/user/staehli/master_thesis/homophone_analysis/mfa_output/english.dict"
-    phrases_vocab = "/home/user/staehli/master_thesis/homophone_analysis/mfa_input/phrases.vocab"
+    phrases_vocab = "/home/user/staehli/master_thesis/homophone_analysis/mfa_input/phrases.vocab.en"
     train_mfa_dic = pde.get_dictionary(path_mfa_dic)
     full_dic = pde.get_dictionary(path_full_dic)
     #Phonetized vocabulary
-    vocab_phon = pde.vocab_to_dictionary(phrases_vocab, full_dic, train_mfa_dic)
+    vocab_phon = pde.vocab_to_dictionary(phrases_vocab, full_dic)
+
     #Homophones in train data. TODO: Write this to file, because programm runs slow.
-    # homophones_en = pde.get_homophone_tuples(vocab_phon)
-    #Dictionary as dataframe.
+    counter = 0
+    homophones_en = pde.get_homophone_tuples(vocab_phon)
+    # for key in homophones_en:
+    #     if len(homophones_en[key]) > 1:
+    #         print(key, homophones_en[key])
+    #         counter += len(homophones_en[key])
+    # print(counter)
+
+    # 1.b Dictionary as dataframe
     # train_dataframe_en = pd.DataFrame(homophones_en.items(), columns=["phoneme type", "grapheme type"])
     # train_dataframe_en.to_csv("train.en.freq.csv")
 
     # 2. Generate phoneme representations by sentence and write to file (source side).
-    train_phrases = "/home/user/staehli/master_thesis/homophone_analysis/phrases.short.en"
-    pde.grapheme_to_phoneme(vocab_phon, train_phrases, "phrases.ph.en")
+    # train_phrases = "/home/user/staehli/master_thesis/homophone_analysis/phrases.en"
+    # pde.grapheme_to_phoneme(vocab_phon, train_phrases, "phrases.ph.en")
 
     # 3. Frequencies of homophones by grapheme type in train data (source)
     # train_tc_en = "/home/user/staehli/master_thesis/data/MuST-C/train.tc.en"
