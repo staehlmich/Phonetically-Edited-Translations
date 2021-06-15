@@ -72,26 +72,18 @@ def get_homophone_tuples(dic: dict) -> dict:
     @return: dictionary {phoneme string type: [type1, type2]}
     """
     # Solution by:
-    # https://www.geeksforgeeks.org/python-find-keys-with-duplicate-values-in-dictionary/
-    rev_dict = {}
-    multiples = dict()
+    # https://www.geeksforgeeks.org/python-program-to-swap-keys-and-values-in-dictionary/
+    new_dict = OrderedDict()
 
     for key, value in dic.items():
-        rev_dict.setdefault(value, set()).add(key)
+        if value in new_dict:
+            new_dict[value].append(key)
+        else:
+            new_dict[value] = [key]
 
-    result = set(chain.from_iterable(
-        values for key, values in rev_dict.items()
-        if len(values) > 1))
-    for r in result:
-        for key, value in dic.items():
-            if r == key:
-                if value not in multiples:
-                    multiples[value] = [key]
-                else:
-                    multiples[value].append(key)
-    #return as sorted OrderedDict, so sequence is the same and
-    #analysis easier.
-    return OrderedDict(sorted(multiples.items()))
+    # return as sorted OrderedDict, so sequence is the same and
+    # analysis easier.
+    return new_dict
 
 def vocab_to_dictionary(vocab_file: str, full_dic: dict, *args) -> dict:
     """
@@ -119,7 +111,7 @@ def vocab_to_dictionary(vocab_file: str, full_dic: dict, *args) -> dict:
                         # Insert phoneme boundary tag.
                         phon_dic[token] = mfa_dic[token].replace(" ", "<pb>")
                 else:
-                    phon_dic[token] = ["<UNK>"]
+                    phon_dic[token] = "<UNK>"
     return phon_dic
 
 def grapheme_to_phoneme(pronunciation_dic:dict, input_file: str,  output_file:str):

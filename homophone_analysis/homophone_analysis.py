@@ -13,7 +13,8 @@ import phoneme_dictionary_extract as pde
 import csv
 import pandas as pd
 from nltk import ngrams
-
+import json
+import timeit
 
 #Maybe delete this function. Output not very useful.
 def find_similar_types(iter1, iter2):
@@ -92,8 +93,15 @@ def search_homophone_counts(phone_dic, searchfile):
 #Could include these functions in phoneme dictionary class.
 
 def return_ngrams(line:str, n:int):
-    line = line.translate(str.maketrans('', '', string.punctuation))
-    return [ngram for ngram in ngrams(line.rstrip().split(), n)]
+    """
+    Helper function to return ngrams from phonetized phrase table file.
+    @param line: Line does not contain punctuation symbols and includes
+    phoneme string tags: "<PHON:K<pb>IH1<pb>D>" == "kid"
+    @param n: ngram order
+    @return:
+    """
+    line = line.rstrip().replace("PHON:", "").split()
+    return [ngram for ngram in ngrams(line, n)]
 
 ### Find homophones & phonetically close strings ###
 #Define own class? Or as part of PhonDicExt?
@@ -101,21 +109,41 @@ def return_ngrams(line:str, n:int):
 #Careful: Dictionary with phones for correct splitting!
 #Careful: new found tokens/phrases have to be in phrase table!
 
+def phon_string_in_gram(phon_string, ngram):
+    """
+    Helper function to check if phonetic string in ngram.
+    @param phon_string:
+    @param gram:
+    @return:
+    """
+    match = None
+    for token in ngram:
+        #TODO: does <> make sense in .ph file?
+        #Phonetic string from dictionary doesn't contain token boundaries.
+        token = token.strip("<>")
+        if token == phon_string:
+            return True
+        else:
+            match = False
+    return match
+
 # 1. Simple search: 1 Substring in ngram
-def find_homophones(hphone_dic:dict, grams: list):
-    for gram in grams:
-        phone_str = "".join(e for e in gram)
-        for key in hphone_dic:
-            #Remove whitespaces from dictionary
-            joined_key = ''.join(key.split())
+def find_homophones(phone_dic:dict, grams: list):
+    for key in phone_dic:
+        for gram in grams:
+            joined_gram = None
+            if not phon_string_in_gram(key, gram):
+                #TODO: find ovelapping phonetic string!
+                pass
+
+
+
+
+
             #TODO: include phoneme boundaries!
             #TODO: Restriction: new string has to include stress!
-            if joined_key not in gram[0]:
-                if joined_key not in gram[1]:
-                    if joined_key in phone_str:
-                        if len(phone_str) > 3:
-                            #TODO: phonemes not letters!
-                            yield (gram, joined_key, hphone_dic[key])
+
+            # yield (gram, key, hphone_dic[key])
 
 
 # 2. Levenshtein: Find phonetically close tokens. Can't be substrings.
@@ -138,12 +166,16 @@ def main():
     train_mfa_dic = pde.get_dictionary(path_mfa_dic)
     full_dic = pde.get_dictionary(path_full_dic)
     #Phonetized vocabulary
-    vocab_phon = pde.vocab_to_dictionary(phrases_vocab, full_dic)
+    vocab_phon = pde.vocab_to_dictionary(phrases_vocab, full_dic, train_mfa_dic)
 
     #Homophones in train data. TODO: Write this to file, because programm runs slow.
-    counter = 0
+    # counter = 0
     homophones_en = pde.get_homophone_tuples(vocab_phon)
+    # print(homophones_en.keys())
+    # print(len(vocab_phon))
+    # print(len(homophones_en))
     # for key in homophones_en:
+    #     print(key)
     #     if len(homophones_en[key]) > 1:
     #         print(key, homophones_en[key])
     #         counter += len(homophones_en[key])
@@ -165,21 +197,13 @@ def main():
 
     #Find homophones over token boundaries and close phonetic matches.
 
-    # example = "BAE1K IH0N NUW1 YAO1RK , AY1 AH0M TH HHEH1D AA1F DIH0VEH1LAH0PMAH0NT FAO1R AH0 NAA0N @-@ PRAA1FIH0T KAO1LD RAA1BIH0N HHUH2D ."
-    # example_bigrams = return_ngrams(example, 2)
+    example = "<PHON:DH<pb>IY0> <PHON:P<pb>UW1<pb>R> <PHON:K<pb>IH1<pb>D>\n"
+    example_bigrams = return_ngrams(example, 2)
+    print(example_bigrams)
+    print(phon_string_in_gram("<DH<pb>IY0>", example_bigrams[0]))
     # for elem in find_homophones(homophones_en, example_bigrams):
     #     print(elem)
-    # print(train_mfa_dic["zubin"])
-    # with open("phrases.ph.en", "r", encoding="utf-8") as infile:
-    #     counter = 0
-    #     phon_strings = []
-    #     for line in infile:
-    #         bigrams = return_ngrams(line,2)
-    #         for e in find_homophones(homophones_en, bigrams):
-    #             phon_strings.append(e)
-    #             counter +=1
-    #             print(e)
-    #     print(len(phon_strings))
+
 
     # 5. Find errors in test data
 
