@@ -66,7 +66,7 @@ def return_ngrams(line:str, n:int):
     @return:
     """
     #Remove boundary characters "<PHON: ...>"
-    line = line[0:-2].replace("<PHON:", "").split("> ")
+    line = line[1:-2].replace("<PHON:", "").split("> ")
     return [ngram for ngram in ngrams(line, n)]
 
 ### Find homophones & phonetically close strings ###
@@ -92,7 +92,6 @@ def join_phon_string(ngram: tuple, mode="phone") -> (str, dict):
     else:
         joined_gram = "".join((token for token in ngram))
     cum_len = 0
-    print(joined_gram)
     for n, token in enumerate(ngram):
         #TODO: Error here!
         mappings[tuple(i+cum_len for i in range(0, len(token)))] = n
@@ -184,16 +183,17 @@ def main():
     #     print(elem)
     # ex2 = [("tail", "or", "made")]
     # print(find_homophones("ilormade", ex2))
-    # with open("phrases.ph.short.en", "r") as infile:
-    #     for key in homophones_en:
-    #         for line in infile:
-    #             ngrams = return_ngrams(line, 2)
-    #             print(ngrams)
-    #             match = find_phon_substring(key, ngrams)
-    #             if match != None:
-    #                 print(match)
-    new_string, mappings = join_phon_string(('<<P><ER0><S><EH1><N><T>>', '<<AH1><V>>'))
-    print(new_string, mappings)
+    with open("phrases.ph.short.en", "r") as infile:
+        for key in homophones_en:
+            for line in infile:
+                ngrams = return_ngrams(line, 2)
+                match = find_phon_substring(key, ngrams)
+                if match != None:
+                    print(match)
+
+    #Test
+    # new_string, mappings = join_phon_string(('<P><ER0><S><EH1><N><T>>', '<AH1><V>'))
+    # print(new_string, mappings)
 
 
 
