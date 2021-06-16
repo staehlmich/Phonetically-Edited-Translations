@@ -29,41 +29,6 @@ def find_similar_types(iter1, iter2):
                 similar_types[item1] = item2
     return similar_types
 
-def get_homophone_translations(token:str, source:str, translation:str, alignment_file:str) -> Iterator:
-    """
-    Function that opens a source and reference/target file of aligned
-    sentences and prints sentences that contains token on source side.
-    @param token: homophone (grapheme strings).
-    @param source: Path to source file (grapheme strings).
-    @param translation: Path reference/target file (grapheme strings).
-    @param alignment_file: Path to fast_align alignment file.
-    @return: yields tuples containing: (sent_id, word_id_source, source_token, trans_token, trans_align)
-    """
-    #STEPS:
-    #1. Iterate over files in parallel
-    #2. Find homophone string in source.
-    #3. Helper function that retrieves alignment for sent_id/word_id --> string to list --> list to dictionary
-    #TODO: 4. sliding window --> I want to search/view homophone representations!
-
-    with open(source, "r", encoding="u8") as src, \
-         open(translation, "r", encoding="u8") as trans:
-        src = src.readlines()
-        trans = trans.readlines()
-        for i in range(len(src)):
-            src_line = src[i]
-            if token in src_line:
-                for (j, k) in enumerate(src_line.split()):
-                    if token.lower() == k.lower():
-                            alignment = get_alignment(i, j, alignment_file)
-                            try:
-                                trans_line = trans[i].split()
-                                translation = trans_line[alignment[1]]
-                                yield (i+1, j+1, k, translation, alignment[0]+1)
-                            #Fast align didn't align anything to token.
-                            except TypeError:
-                                #Could also be due to poor ASR: I don't want to discard these cases! These interest me!
-                                yield (i+1, j+1, k, "NA", 0)
-
 def search_homophone_counts(phone_dic, searchfile):
     """
     Method that searches for homophones in test or training data and
@@ -100,7 +65,8 @@ def return_ngrams(line:str, n:int):
     @param n: ngram order
     @return:
     """
-    line = line.rstrip().replace("PHON:", "").split()
+    #Remove boundary characters "<PHON: ...>"
+    line = line[0:-2].replace("<PHON:", "").split("> ")
     return [ngram for ngram in ngrams(line, n)]
 
 ### Find homophones & phonetically close strings ###
@@ -109,42 +75,58 @@ def return_ngrams(line:str, n:int):
 #Careful: Dictionary with phones for correct splitting!
 #Careful: new found tokens/phrases have to be in phrase table!
 
-def phon_string_in_gram(phon_string, ngram):
+def join_phon_string(ngram: tuple, mode="phone") -> (str, dict):
     """
-    Helper function to check if phonetic string in ngram.
-    @param phon_string:
-    @param gram:
+    Helper function to join tokens in ngram.
+    @param ngram: ngram tuple.
+    @param mode: If tokens are in phonetic representation.
     @return:
     """
-    match = None
-    for token in ngram:
-        #TODO: does <> make sense in .ph file?
-        #Phonetic string from dictionary doesn't contain token boundaries.
-        token = token.strip("<>")
-        if token == phon_string:
-            return True
-        else:
-            match = False
-    return match
+    #Concatenated tokens of ngram.
+    joined_gram = ""
+    #Indexes of joined_gram in original tokens.
+    mappings = {}
+    #Tokens are phonetic strings.
+    if mode == "phone":
+        joined_gram = "".join((token[1:-1] for token in ngram))
+    else:
+        joined_gram = "".join((token for token in ngram))
+    cum_len = 0
+    print(joined_gram)
+    for n, token in enumerate(ngram):
+        #TODO: Error here!
+        mappings[tuple(i+cum_len for i in range(0, len(token)))] = n
+        cum_len += len(token)
+    return joined_gram, mappings
 
 # 1. Simple search: 1 Substring in ngram
-def find_homophones(phone_dic:dict, grams: list):
-    for key in phone_dic:
-        for gram in grams:
-            joined_gram = None
-            if not phon_string_in_gram(key, gram):
-                #TODO: find ovelapping phonetic string!
-                pass
-
-
-
-
+def find_phon_substring(search_string, grams: list):
+    """
+    Function that searches for a substring in concatenation of token in
+    ngram.
+    @param search_string: subsrting
+    @param grams: List of ngrams from line.
+    @return: if True, return substring.
+    """
+    for gram in grams:
+        joined_gram, mappings = join_phon_string(gram)
+        if search_string in joined_gram:
+            start_pos = joined_gram.index(search_string)
+            end_pos = start_pos+len(search_string)
+            start_token = 0
+            end_token = 0
+            for key in mappings:
+                if start_pos in key:
+                    start_token = mappings[key]
+                elif end_pos-1 in key:
+                    end_token = mappings[key]
+            if start_token != end_token:
+                return search_string
 
             #TODO: include phoneme boundaries!
             #TODO: Restriction: new string has to include stress!
 
             # yield (gram, key, hphone_dic[key])
-
 
 # 2. Levenshtein: Find phonetically close tokens. Can't be substrings.
 # Different weights: stresses, close location!
@@ -171,7 +153,6 @@ def main():
     #Homophones in train data. TODO: Write this to file, because programm runs slow.
     # counter = 0
     homophones_en = pde.get_homophone_tuples(vocab_phon)
-    # print(homophones_en.keys())
     # print(len(vocab_phon))
     # print(len(homophones_en))
     # for key in homophones_en:
@@ -181,6 +162,7 @@ def main():
     #         counter += len(homophones_en[key])
     # print(counter)
 
+
     # 1.b Dictionary as dataframe
     # train_dataframe_en = pd.DataFrame(homophones_en.items(), columns=["phoneme type", "grapheme type"])
     # train_dataframe_en.to_csv("train.en.freq.csv")
@@ -189,20 +171,31 @@ def main():
     # train_phrases = "/home/user/staehli/master_thesis/homophone_analysis/phrases.en"
     # pde.grapheme_to_phoneme(vocab_phon, train_phrases, "phrases.ph.en")
 
-    # 3. Frequencies of homophones by grapheme type in train data (source)
-    # train_tc_en = "/home/user/staehli/master_thesis/data/MuST-C/train.tc.en"
-    # source_counts = phon_ext.search_homophone_counts(homophones_en, train_tc_en)
-    # source_counts = source_counts.groupby(["phone_type", "graph_types", "graph_type"])["graph_type"].count().reset_index(name="count")
-    # source_counts.to_csv("src.counts.2.csv", index=False)
-
     #Find homophones over token boundaries and close phonetic matches.
 
-    example = "<PHON:DH<pb>IY0> <PHON:P<pb>UW1<pb>R> <PHON:K<pb>IH1<pb>D>\n"
-    example_bigrams = return_ngrams(example, 2)
-    print(example_bigrams)
-    print(phon_string_in_gram("<DH<pb>IY0>", example_bigrams[0]))
+    # example = "<PHON:<<DH><IY0>>> <PHON:<<P><UW1><R>>> <PHON:<<K><IH1><D>>>\n"
+    # example_bigrams = return_ngrams(example, 2)
+    # print(example_bigrams)
+    # for gram in example_bigrams:
+    #     joined_gram = "".join((token[1:-1] for token in gram))
+    #     print(joined_gram)
+    # print(phon_string_in_gram("<DH<pb>IY0>", example_bigrams[0]))
     # for elem in find_homophones(homophones_en, example_bigrams):
     #     print(elem)
+    # ex2 = [("tail", "or", "made")]
+    # print(find_homophones("ilormade", ex2))
+    # with open("phrases.ph.short.en", "r") as infile:
+    #     for key in homophones_en:
+    #         for line in infile:
+    #             ngrams = return_ngrams(line, 2)
+    #             print(ngrams)
+    #             match = find_phon_substring(key, ngrams)
+    #             if match != None:
+    #                 print(match)
+    new_string, mappings = join_phon_string(('<<P><ER0><S><EH1><N><T>>', '<<AH1><V>>'))
+    print(new_string, mappings)
+
+
 
 
     # 5. Find errors in test data

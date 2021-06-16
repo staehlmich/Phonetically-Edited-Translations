@@ -50,7 +50,7 @@ def get_dictionary(filename:str) -> dict:
     Method that returns a dictionary with {grapheme string type: [phoneme string type1, ...n]}
     n is limited to 1 due to MFA parameter setting.
     @filename: Path to dictionary file.
-    @return:
+    @return: TODO: example!
     """
 
     # TODO: list as value not needed, because MFA outputs 1 possible representation.
@@ -58,7 +58,7 @@ def get_dictionary(filename:str) -> dict:
     mappings = {}
     for elem in data_formatter(filename):
         #Insert phoneme boundary tag.
-        mappings[elem[0]] = elem[1].replace(" ", "<pb>")
+        mappings[elem[0]] = "<"+elem[1].replace(" ", "><")+">"
 
     # return as sorted OrderedDict, so sequence is the same and
     # analysis easier.
@@ -92,7 +92,7 @@ def vocab_to_dictionary(vocab_file: str, full_dic: dict, *args) -> dict:
     @param vocab_file: Path to vocab file. Contains one type per line.
     @param full_dic: Full dic from output function get_dictionary.
     @param args: Additional MFA dic from output function get_dictionary.
-    @return:
+    @return: TODO: example!
     """
 
     phon_dic = {}
@@ -101,7 +101,7 @@ def vocab_to_dictionary(vocab_file: str, full_dic: dict, *args) -> dict:
         if token in full_dic:
             if token not in phon_dic:
                 # Insert phoneme boundary tag.
-                phon_dic[token] = full_dic[token].replace(" ", "<pb>")
+                phon_dic[token] = "<"+full_dic[token].replace(" ", "><")+">"
         else:
             #Additional phonetic dictionary.
             if args:
@@ -109,7 +109,7 @@ def vocab_to_dictionary(vocab_file: str, full_dic: dict, *args) -> dict:
                 if token in mfa_dic:
                     if token not in phon_dic:
                         # Insert phoneme boundary tag.
-                        phon_dic[token] = mfa_dic[token].replace(" ", "<pb>")
+                        phon_dic[token] = "<"+mfa_dic[token].replace(" ", "><")+">"
                 else:
                     phon_dic[token] = "<UNK>"
     return phon_dic
