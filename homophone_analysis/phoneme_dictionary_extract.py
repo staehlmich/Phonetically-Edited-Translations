@@ -57,8 +57,10 @@ def get_dictionary(filename:str) -> dict:
     # Change values to type str in all methods!
     mappings = {}
     for elem in data_formatter(filename):
-        #Insert phoneme boundary tag.
-        mappings[elem[0]] = "<"+elem[1].replace(" ", "><")+">"
+        #Ommit single characters.
+        if len(elem[1]) > 2:
+            #Insert phoneme boundary tag.
+            mappings[elem[0]] = "<"+elem[1].replace(" ", "><")+">"
 
     # return as sorted OrderedDict, so sequence is the same and
     # analysis easier.
@@ -101,7 +103,7 @@ def vocab_to_dictionary(vocab_file: str, full_dic: dict, *args) -> dict:
         if token in full_dic:
             if token not in phon_dic:
                 # Insert phoneme boundary tag.
-                phon_dic[token] = "<"+full_dic[token].replace(" ", "><")+">"
+                phon_dic[token] = full_dic[token].replace(" ", "><")
         else:
             #Additional phonetic dictionary.
             if args:
@@ -109,7 +111,7 @@ def vocab_to_dictionary(vocab_file: str, full_dic: dict, *args) -> dict:
                 if token in mfa_dic:
                     if token not in phon_dic:
                         # Insert phoneme boundary tag.
-                        phon_dic[token] = "<"+mfa_dic[token].replace(" ", "><")+">"
+                        phon_dic[token] = mfa_dic[token].replace(" ", "><")
                 else:
                     phon_dic[token] = "<UNK>"
     return phon_dic

@@ -8,7 +8,7 @@ from typing import Iterator
 from itertools import chain
 from collections import Counter
 import string
-# import Levenshtein
+import Levenshtein
 import phoneme_dictionary_extract as pde
 import csv
 import pandas as pd
@@ -66,7 +66,9 @@ def return_ngrams(line:str, n:int):
     @return:
     """
     #Remove boundary characters "<PHON: ...>"
-    line = line[1:-2].replace("<PHON:", "").split("> ")
+    line = line[0:-2].replace("<PHON:", "").split("> ")
+    #Remove token boundaries <>.
+    line = [token[1:-1] for token in line]
     return [ngram for ngram in ngrams(line, n)]
 
 ### Find homophones & phonetically close strings ###
@@ -88,7 +90,7 @@ def join_phon_string(ngram: tuple, mode="phone") -> (str, dict):
     mappings = {}
     #Tokens are phonetic strings.
     if mode == "phone":
-        joined_gram = "".join((token[1:-1] for token in ngram))
+        joined_gram = "".join((token for token in ngram))
     else:
         joined_gram = "".join((token for token in ngram))
     cum_len = 0
@@ -99,33 +101,64 @@ def join_phon_string(ngram: tuple, mode="phone") -> (str, dict):
     return joined_gram, mappings
 
 # 1. Simple search: 1 Substring in ngram
-def find_phon_substring(search_string, grams: list):
+def find_phon_substring(search_string, gram: tuple, mode="phone", min_len=6):
     """
-    Function that searches for a substring in concatenation of token in
-    ngram.
+    Function that searches for a substring in concatenation of ngrams of
+    a line.
     @param search_string: subsrting
     @param grams: List of ngrams from line.
+    @param mode: If string is phonemes or graphemes.
+    To pass to helper function join_phon_string.
+    @param min_len: minimum length of search string.
+    Default = longer than a single phoneme.
     @return: if True, return substring.
     """
-    for gram in grams:
-        joined_gram, mappings = join_phon_string(gram)
+    # for gram in grams:
+    joined_gram, mappings = join_phon_string(gram, mode=mode)
+    # print(search_string, joined_gram)
+    if len(search_string) > min_len:
         if search_string in joined_gram:
             start_pos = joined_gram.index(search_string)
             end_pos = start_pos+len(search_string)
+            # print(start_pos, end_pos)
             start_token = 0
             end_token = 0
             for key in mappings:
                 if start_pos in key:
                     start_token = mappings[key]
-                elif end_pos-1 in key:
+                if end_pos-1 in key:
                     end_token = mappings[key]
+            # print(start_token, end_token)
             if start_token != end_token:
+                #Return or yield? Search at line level of ngram level?
+                # print(joined_gram, [token for token in gram])
+                # print((start_pos, end_pos),(start_token, end_token), mappings)
                 return search_string
 
-            #TODO: include phoneme boundaries!
             #TODO: Restriction: new string has to include stress!
 
-            # yield (gram, key, hphone_dic[key])
+def find_phon_levdist(search_string,phon_string, dist:int):
+    """
+    Find phonetically close tokens
+    @param search_string:
+    @param phon_string:
+    @param dist:
+    @return:
+    """
+    #Solution by: https://stackoverflow.com/a/19859340
+    # def num_there(s):
+    #     return any(i.isdigit() for i in s)
+
+    # def stress_in_target(s, stresses):
+    #     for stress in stresses:
+
+    stress = [phon+">" for phon in search_string.split(">") if "1" in phon][0]
+    if search_string not in phon_string:
+        lev_dist = Levenshtein.distance(search_string, phon_string)
+        if lev_dist == dist:
+            if stress in phon_string:
+                return phon_string
+
 
 # 2. Levenshtein: Find phonetically close tokens. Can't be substrings.
 # Different weights: stresses, close location!
@@ -161,7 +194,6 @@ def main():
     #         counter += len(homophones_en[key])
     # print(counter)
 
-
     # 1.b Dictionary as dataframe
     # train_dataframe_en = pd.DataFrame(homophones_en.items(), columns=["phoneme type", "grapheme type"])
     # train_dataframe_en.to_csv("train.en.freq.csv")
@@ -170,33 +202,32 @@ def main():
     # train_phrases = "/home/user/staehli/master_thesis/homophone_analysis/phrases.en"
     # pde.grapheme_to_phoneme(vocab_phon, train_phrases, "phrases.ph.en")
 
-    #Find homophones over token boundaries and close phonetic matches.
+    ### Find homophones over token boundaries and close phonetic matches. ###
 
-    # example = "<PHON:<<DH><IY0>>> <PHON:<<P><UW1><R>>> <PHON:<<K><IH1><D>>>\n"
-    # example_bigrams = return_ngrams(example, 2)
-    # print(example_bigrams)
-    # for gram in example_bigrams:
-    #     joined_gram = "".join((token[1:-1] for token in gram))
-    #     print(joined_gram)
-    # print(phon_string_in_gram("<DH<pb>IY0>", example_bigrams[0]))
-    # for elem in find_homophones(homophones_en, example_bigrams):
-    #     print(elem)
-    # ex2 = [("tail", "or", "made")]
-    # print(find_homophones("ilormade", ex2))
-    with open("phrases.ph.short.en", "r") as infile:
-        for key in homophones_en:
-            for line in infile:
-                ngrams = return_ngrams(line, 2)
-                match = find_phon_substring(key, ngrams)
-                if match != None:
-                    print(match)
+    # print(len(homophones_en))
+    # print(list(homophones_en.keys())[0])
+    # print(list(homophones_en.keys())[1])
+    #
+    #TODO: Search function is very slow.
+    #TODO: I need to remember the line id it was found in!
+    # with open("phrases.ph.short.en", "r") as infile:
+    #     for line in infile:
+    #         for key in homophones_en:
+    #                 ngrams = return_ngrams(line, 2)
+                    # for gram in return_ngrams(line, 2):
+                    #     match = find_phon_substring(key, gram)
+                    #     if match != None:
+                    #         print(match, "\n")
 
     #Test
-    # new_string, mappings = join_phon_string(('<P><ER0><S><EH1><N><T>>', '<AH1><V>'))
-    # print(new_string, mappings)
+    # search_string = "<EY1><K>"
+    # ngram = ('<W><IY1>', '<T><EY1><K><IH0><NG>>')
+    # find_phon_substring(search_string, ngram)
 
-
-
+    ex = vocab_phon["glue"]
+    for key in homophones_en:
+        if find_phon_levdist(ex, key, 4):
+            print(key, homophones_en[key])
 
     # 5. Find errors in test data
 
