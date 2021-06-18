@@ -137,6 +137,35 @@ def find_phon_substring(search_string, gram: tuple, mode="phone", min_len=6):
 
             #TODO: Restriction: new string has to include stress!
 
+def minimum_edit_distance(source, target):
+    """
+    Returns the minimum edit distance between two strings @param source and
+    @param target, given the cost of
+        insertion    = 1;
+        deletion     = 1;
+        substitution = 1.
+    Original function by: Samuel Läubli 2019. Modified by: Michael Stähli.
+    """
+    #Keep phoneme boundaries.
+    source = source[1:-1].split("><")
+    target = target[1:-1].split("><")
+    n = len(source)
+    m = len(target)
+    d = [[None for _ in range(m+1)] for _ in range(n+1)]
+    d[0][0] = 0
+    for i in range(1, n+1):
+        d[i][0] = d[i-1][0] + 1
+    for j in range(1, m+1):
+        d[0][j] = d[0][j-1] + 1
+    for i in range(1, n+1):
+        for j in range(1, m+1):
+            d[i][j] = min(
+                d[i-1][j] + 1, # del
+                d[i][j-1] + 1, # ins
+                d[i-1][j-1] + (1 if source[i-1] != target[j-1] else 0) # sub
+                )
+    return d[n][m]
+
 def find_phon_levdist(search_string,phon_string, dist:int):
     """
     Find phonetically close tokens
@@ -153,9 +182,9 @@ def find_phon_levdist(search_string,phon_string, dist:int):
     #     for stress in stresses:
 
     stress = [phon+">" for phon in search_string.split(">") if "1" in phon][0]
-    if search_string not in phon_string:
-        lev_dist = Levenshtein.distance(search_string, phon_string)
-        if lev_dist == dist:
+    if phon_string not in search_string:
+        lev_dist = minimum_edit_distance(search_string, phon_string)
+        if lev_dist <= dist:
             if stress in phon_string:
                 return phon_string
 
@@ -168,7 +197,19 @@ def find_phon_levdist(search_string,phon_string, dist:int):
 # Different weights: stresses, close location!
 
 # ModifiedLev --> class super(Levenshtein))
-
+def phon_loc():
+    plosives = ["P", "B", "T", "D", "K", "G"]
+    nasals = ["M", "N", "NG"]
+    fricatives = ["F", "V", "TH", "DH", "S", "Z", "SH", "H"]
+    approximant = ["R", "Y"]
+    lateral = ["L"]
+    double_cons = ["JH"]
+    close = []
+    close_mid = []
+    open_mid = []
+    open = ["AA"]
+    near_open = []
+    diphtongues = []
 def main():
 
     # Idea 19.4 --> Train BPE on dictionary and generate learned mappings?
@@ -224,12 +265,13 @@ def main():
     # ngram = ('<W><IY1>', '<T><EY1><K><IH0><NG>>')
     # find_phon_substring(search_string, ngram)
 
-    ex = vocab_phon["glue"]
+    ex = vocab_phon["play"]
     for key in homophones_en:
-        if find_phon_levdist(ex, key, 4):
+        if find_phon_levdist(ex, key, 1):
             print(key, homophones_en[key])
-
-    # 5. Find errors in test data
+    print("\n")
+    print(vocab_phon["place"])
+    print(minimum_edit_distance(ex, vocab_phon["place"]))
 
     #TODO: print out grapheme representations of everything --> lookup with original file.
 
