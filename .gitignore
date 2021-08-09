@@ -9,6 +9,8 @@
 /homophone_analysis/*.*
 /homophone_analysis/*/
 !homophone_analysis/*.py
+!homophone_analysis/utils
+!homophone_analysis/old_code
 #/homophone_analysis/
 #/homophone_analysis/mfa_input
 #/homophone_analysis/mfa_output
