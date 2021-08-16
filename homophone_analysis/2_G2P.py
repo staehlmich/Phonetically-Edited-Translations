@@ -2,14 +2,12 @@
 # -*- coding: utf-8 -*-
 #Author: Michael Staehli
 
-from typing import TextIO
 import re
 import argparse
-import pandas as pd
-import wordkit
-from wordkit.corpora.corpora.cmudict import CMU_2IPA
-from wordkit.corpora import reader
 from g2p_en import G2p
+# from dp.phonemizer import Phonemizer
+import epitran
+
 
 class CMUReader(object):
     """
@@ -51,29 +49,58 @@ class CMUReader(object):
         phonemes = self.df.loc[self.df['orthography'] == word]["phonology"].item()
         return " ".join(elem for elem in phonemes)
 
-def table_g2p(table_path: str, sep="\t") -> TextIO:
+def set_g2p(phonebet: str):
+    """
+    Helper function to instantiate G2P instance.
+    @param phonebet: If "IPA" Epitran is set as G2P phonemizer.
+    If "ARPA" G2p is set as G2P phonemizer.
+    @return:
+    """
+    if phonebet == "IPA":
+        return epitran.Epitran("eng-Latn")
+    if phonebet == "ARPA":
+        return G2p()
+
+def g2p(seq: str, phonebet: str, phonemizer) -> str:
+    """
+    Function to phonetize a string.
+    @param seq: String to be phonetized.
+    @param phonebet: If "IPA" Epitran is set as G2P phonemizer.
+    @param phonemizer: Instantiated G2P madel
+    If "ARPA" G2p is set as G2P phonemizer.
+    @return:
+    """
+    #TODO: Fix whitespaces at the end of strings!
+    if phonebet == "IPA":
+        return phonemizer.transliterate(seq)
+    if phonebet == "ARPA":
+        #Remove added apostrophes by phonemizer.
+        return " ".join(phonemizer(seq)).replace(" '", "")
+
+def table_g2p(table_path: str, phonebet: str, sep="\t"):
     """
     Function that takes a filtered moses phrase table and outputs a file
     that also contains a phonetically converte source phrase.
     @param table_path: fitlered phrase table file.
     Line contains: (source_phrase ||| target_phrase1/.../target_phraseN)
+    @param phonebet: Phonetization with IPA or ARPA.
     @param sep: symbol to separate source, phonemes, translations.
     @return: File contains lines with:
     (source_phrase, phonetized phrase, target_phrases)
     """
     with open(table_path, "r", encoding="utf-8") as infile, \
-        open(table_path[:-5]+"ph.en-de", "w", encoding="utf-8") as out:
-        g2p = G2p()
+        open(table_path[:-5]+f"ph.{phonebet.lower()}.en-de", "w", encoding="utf-8") as out:
+        #TODO: instantiate G2P package before loop, to avoid prints.
+        phonemizer = set_g2p(phonebet)
         for line in infile:
             src, trg = (elem for elem in line.split("|||"))
-            src_phon = " ".join(g2p(src))
+            src_phon = g2p(src, phonebet, phonemizer)
             out.write(sep.join([src.strip(" "), src_phon, trg.strip(" ")]))
 
 def main():
-    #Read CMU pronunciation dictionary with wordkit.
-    # cmu = CMUReader("cmudict-0.7b.txt")
 
-    table_g2p("phrases.filtered3.en-de")
+    table_g2p("phrases.filtered3.en-de", "ARPA")
+    # table_g2p("phrases.filtered3.en-de", "IPA")
 
 
 if __name__ == "__main__":

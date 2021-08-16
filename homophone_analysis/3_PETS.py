@@ -6,6 +6,7 @@ from typing import Iterator, Iterable, Generator
 import re
 import string
 import timeit
+import cProfile
 from collections import OrderedDict, defaultdict, Counter
 from collections.abc import MutableMapping
 import numpy as np
@@ -15,6 +16,10 @@ from itertools import islice, groupby
 from g2p_en import G2p
 import Levenshtein
 from nltk.metrics import edit_distance
+from wordkit.features import CVTransformer, OneHotPhonemeExtractor
+from wordkit.corpora.corpora import cmudict
+from scipy.spatial import distance
+from mosestokenizer import MosesTokenizer
 
 class ArpabetChar(str):
     """
@@ -144,7 +149,8 @@ class PhonDict(MutableMapping):
             for line in infile:
                 line = line.rstrip().split("\t")
                 if len(line) != 1:
-                    yield SuperString(line[0], line[1], "None")
+                    if line[0].count(" ") == 0:
+                        yield SuperString(line[0], line[1], line[2])
 
     def _set_vocab(self):
         """
@@ -203,11 +209,11 @@ class PhonPhrases(PhonDict):
             # if max(1, n-max_dist) <= len(elem.joined_phoneme) <= n+max_dist:
                 yield elem
 
+    #TODO: paramter CMU/IPA
     def phrase_to_phon(self, phrase:str) -> str:
-        #TODO: Adapt for CMU!
         """
         Method that looks up phonetic representation in self._store.
-        If phrase not in self._store, resort to Epitran as slower method.
+        If phrase not in self._store, resort to Epitran/g2p as slower method.
         @param phrase: phrase as grapheme string.
         @return: IPA representation of phrase.
         """
@@ -215,7 +221,7 @@ class PhonPhrases(PhonDict):
             return self._store[phrase].phoneme
         except KeyError:
             g2p = G2p()
-            return g2p(phrase)
+            return " ".join(g2p(phrase))
 
     def phonetic_levenshtein(self, search: str, max_dist=3) -> Iterator:
         """
@@ -227,13 +233,18 @@ class PhonPhrases(PhonDict):
         """
         search_phon = self.phrase_to_phon(search)
         joined_search = "".join(elem for elem in search_phon.split())
-        #Only look at phrases of length +- max_dist
+        #Count the number of stresses.
+        # num_stresses = sum(c.isdigit() for c in joined_search)
+        # Only look at phrases of length +- max_dist
         for superstring in self._phrases_by_length(len(joined_search)):
             #Filter phrases by same number of tokens.
             #TODO: Save this format in superstring? Or as method Makes if very slow?
             #Look up levenshtein distance with joined phonetized phrase.
             # TODO: optimal distance?
-            if Levenshtein.distance(joined_search, superstring.joined_phoneme) <= max_dist:
+            # if Levenshtein.distance(joined_search,
+            #                         superstring.joined_phoneme) <= max_dist:
+            if Levenshtein.distance(joined_search, superstring.joined_phoneme) <= round(len(joined_search)/3):
+            # if edit_distance(ArpabetChar(search_phon.split(" ")), ArpabetChar(superstring.phoneme.split(" ")), substitution_cost=2) <= max_dist:
                 # Filter out longest substring, so that not additional tokens.
                 # Check grapheme tokens, to avoid different phonetic representations of longer strings.
                 # if self.longest_token(search,superstring.grapheme) == False:
@@ -288,44 +299,67 @@ class Candidates(object):
         self._source_sent = source_sent
         self._target_sent = target_sent
 
-    def _yield_candidates(self, phon_table):
+    def everygrams(self, sent: str, length=3) -> Iterator:
+        """
+        Helper method to return ngrams of order n up to to length.
+        @param sent: Source or target sentence.
+        @param length: Highest ngram order.
+        @return:
+        """
+        return (" ".join(elem) for elem in nltk.everygrams(sent.split(), max_len=length))
+
+    def _search_candidates(self, phon_table):
         """
         Method to check which ngrams don't have a translation in phon_table.
         @param phon_table: Instance of PhonPhrases.
         @return: src_cands = list with source phrases that have no translation in phon_table.
-        trg_cands = list of translation phrases, that can't be aligned to src_cands.
         """
-        #TODO: code repetition
-        source_grams = list(" ".join(elem) for elem in nltk.everygrams(self._source_sent.split(), max_len=3))
-        #Use set for faster lookups.
-        target_grams = {" ".join(elem) for elem in nltk.everygrams(self._target_sent.split(), max_len=3)}
-        non_cands = [phon_table[src] for src in set(source_grams).intersection(phon_table.keys()) if phon_table[src].translation in target_grams]
-        src_non_cands = {elem.grapheme for elem in non_cands}
-        trg_non_cands = {elem.translation for elem in non_cands}
-        # src_non_cands = {phon_table[src].grapheme for src in source_grams if src in phon_table.keys() if phon_table[src].translation in target_grams}
-        # trg_non_cands = {phon_table[src].translation for src in source_grams if src in phon_table.keys() if phon_table[src].translation in target_grams}
-        src_cands = list({src for src in source_grams if src not in src_non_cands if len(src) > 3})
-        trg_cands = {trg for trg in target_grams if trg not in trg_non_cands if len(trg) > 3}
-        return src_cands, trg_cands
+        src_grams = [" ".join(elem) for elem in
+                     nltk.everygrams(self._source_sent.split(), max_len=3)]
+        keys = set(phon_table.keys())
+        for src in src_grams:
+            if src in keys:
+                value = phon_table[src]
+                if re.search(rf"\b{src}\b", self._source_sent) != None:
+                    # TODO: if any translation matches!
+                    if all(re.search(rf"\b{trans}\b", self._target_sent) == None
+                           for trans
+                           in value.translation.split("/")):
+                        yield value.grapheme
 
-    def phon_edit_translations(self, phon_table) -> Iterator:
+    def _filter_candidates(self, phon_table):
+        """
+        Method to filter candidates. Keep only phrases, where all tokens
+        do not have a translation in self._target_sent.
+        @return:
+        """
+        candidates = list(self._search_candidates(phon_table))
+        new_candidates = [cand for cand in candidates if all(elem in candidates for elem in cand.split()) == True]
+
+        return new_candidates
+
+    def pets(self, phon_table) -> Iterator:
         """
         Method to yield all translations of phonetically similar strings of
         ngrams in src_cands.
         @param phon_table: Instance of PhonPhrases.
         @return:
         """
-        src_cands, trg_cands = self._yield_candidates(phon_table)
-        # print(len(src_cands), len(trg_cands))
+        src_cands = self._filter_candidates(phon_table)
         for src_cand in src_cands:
-            # Simphones are phonetically similar strings (lev-dist <=3)
-            for simphone in phon_table.phonetic_levenshtein(src_cand,max_dist=3):
-                if simphone.translation in trg_cands:
-                    #Filter phrases that add tokens.
-                    if phon_table.longest_token(src_cand, simphone.grapheme) == False:
-                        #Filter by index position.
-                        if abs(self._source_sent.split().index(src_cand.split()[0])-self._target_sent.split().index(simphone.translation.split()[0])) <=3:
-                            yield (src_cand, simphone.grapheme, simphone.translation)
+            # Search phonetically similar strings (lev-dist <=3)
+            src_cand_phon = phon_table.phrase_to_phon(src_cand)
+            #Additional filter with cosine similarity.
+            simphones = list(phon_table.phonetic_levenshtein(src_cand,max_dist=3))
+            if len(simphones) > 10:
+                phonsims = PhonSimStrings(simphones)
+                for simphone in phonsims.most_similar(src_cand_phon):
+                    #Account for top 3 translations.
+                    if any(re.search(rf"\b{trans}\b", self._target_sent) != None
+                           for trans
+                           in simphone.translation.split("/")):
+                                #Filter by index for higher precision.
+                                yield (src_cand, simphone.grapheme, simphone.translation)
 
 class FileReader(object):
     """
@@ -359,122 +393,157 @@ class FileReader(object):
         Method to yield lines, according to parameter mode.
         @return:
         """
-        tokenizer = MosesTokenizer(self._lang)
+        tokenize = MosesTokenizer(self._lang)
         for line in self._line_iter():
             if self._mode == "line":
                 yield line
             elif self._mode == "token":
-                yield " ".join(elem for elem in tokenizer.tokenize(line))
+                yield " ".join(elem for elem in tokenize(line))
             elif self._mode == "no_punct":
-                yield " ".join(elem for elem in tokenizer.tokenize(line) if elem not in string.punctuation)
+                yield " ".join(elem for elem in tokenize(line) if elem not in string.punctuation)
+
+class PhonSimStrings(object):
+    """
+    Class to return most phonetically similar strings from a list of
+    SuperStrings.
+    """
+    def __init__(self, superstrings: list):
+        self.candidates = superstrings
+        self.ipas = [self.arpabet_to_ipa(elem.phoneme) for elem in superstrings]
+        self.vecs = self.ipas_to_vecs(self.ipas)
+
+    @staticmethod
+    def arpabet_to_ipa(phonstring: str) -> tuple:
+        """
+        Method to turn a string of ARPABET chars into a
+        string of IPA chars using the wordkit library.
+        @param phonstring:
+        @return:
+        """
+        #Remove token boundaries and separate into phonemes.
+        arpa_string = phonstring.split()
+        #Convert characters and split dipthtongs.
+        ipa_tuple = tuple("".join(cmudict.cmu_to_ipa(arpa_string)))
+
+        return ipa_tuple
+
+    def ipas_to_vecs(self, phonstrings:list) -> list:
+        """
+        Method to turn a list of IPA phoneme strings into a list of
+        feature vectors. The feactures are calculated with the
+        wordkit library (CVTransformer)
+        @param phonstrings: List with tuples of IPA phoneme strings
+        @return: list with feature vectors.
+        """
+        self._c = CVTransformer(OneHotPhonemeExtractor, field=None)
+        X = self._c.fit_transform(phonstrings)
+
+        return [self._c.vectorize(word) for word in phonstrings]
+
+    def most_similar(self, search, sim=0.4) -> Iterator:
+        """
+        Method to return the phonetically most similar strings for search.
+        @param search: Class SuperString.
+        @param sim: Upper bound cosine similarity.
+        @return:
+        """
+        search_ipa = self.arpabet_to_ipa(search)
+        search_vec = self._c.vectorize(search_ipa)
+        distances = [distance.cosine(search_vec, elem) for elem in self.vecs]
+        for i, elem in enumerate(distances):
+            if elem < sim:
+                yield self.candidates[i]
 
 def foo():
     """
     To timeit methods.
     @return:
     """
-    char1 = ArpabetChar(["AH0"])
-    char3 = ArpabetChar(["AE1"])
-    print(f"Levenshtein distance {char1} and {char3}:{minimum_edit_distance(char1, char3)}")
+    phon_table = PhonPhrases("phrases.filtered3.ph.arpa.en-de")
+    source_ex = "In fact every living creature is written in exactly the same set of letters and the same code".lower()
+    test_ex = "Und in jedem Lebewesen ist es sozusagen aus Großbritannien genau mit den Buchstaben am selben Code".lower()
+    candidates = Candidates(source_ex, test_ex)
+    for match in candidates.phon_edit_translations(phon_table):
+        print(match)
 
 def foo2():
     """
     To timeit 2 method.
     @return:
     """
-    char1 = ArpabetChar(["AH0"])
-    char3 = ArpabetChar(["AE1"])
-    print(f"NLTK levenshtein distance{char1} and {char3}: {edit_distance(char1, char3)}")
+    phon_table = PhonPhrases("phrases.filtered3.ph.arpa.en-de")
+    source_ex = "In fact every living creature is written in exactly the same set of letters and the same code".lower()
+    test_ex = "Und in jedem Lebewesen ist es sozusagen aus Großbritannien genau mit den Buchstaben am selben Code".lower()
+    new_candidates = Candidates(source_ex, test_ex)
+    for match in new_candidates.pets(phon_table):
+        print(match)
 
 def main():
 
-    ### 1. Phonetize vocabulary and phrase table###
-    ### 1. Phonetize vocabulary and phrase table###
-    ### 2. Get phonetic dictionary and homophones ###
-    # phon_dic = PhonDict("phrases.filtered3.ph.en-de")
+    ### 1. Get phonetic dictionary and homophones ###
+
+    # phon_dic = PhonDict("phrases.filtered3.ph.arpa.en-de")
+    # print(f"Number of types: {len(phon_dic)}")
+    phon_table = PhonPhrases("phrases.filtered3.ph.arpa.en-de")
+    # print("Number of phrases:", len(phon_table))
+
+    # token_lengths = Counter(
+    #     map(lambda x: x.grapheme.count(" "), phon_table.values()))
+    # print(f"Number of phrases by token count:")
+    # for i, count in sorted(token_lengths.items()):
+    #     print(i+1, count)
+    #
     # homophones = phon_dic.get_homophones()
-    # print("Length of PhonDict:", len(phon_dic))
-    # print("Numer of homophone types:", len(homophones))
-    # print(phon_dic["weak"])
-
-    # src, src_phon, trans = (elem for elem in "a boy 	AH0   B OY1	 a boy/ein junge/einen jungen".split("\t"))
-    # super = SuperString(src, src_phon, trans)
-    # print(super.phoneme)
-    #
-    # char1 = ArpabetChar(["AH0"])
-    # char2 = ArpabetChar(["AH1"])
-    # char3 = ArpabetChar(["AE1"])
-    # print("Indexing:", char1[0])
-    # print(f"Length of {char1}: {len(char1)}")
-    # print(f"Length of {char2}: {len(char2)}")
-    #
-    # print(f"Levenshtein distance {char1} and {char2}:{Levenshtein.distance(char1, char2)}")
-    # print(f"Levenshtein distance {char1} and {char3}:{Levenshtein.distance(char1, char3)}")
-    #
-    # char4 = ArpabetChar(["AH0", "B", "OY1"])
-    # new_char = char4[2]
-    # print(new_char[0], len(new_char))
-    # print(len(str(char1)))
-    # print(f"NLTK levenshtein distance {char1} and {char2}: {edit_distance(char1, char2)}")
-    # print(f"NLTK levenshtein distance {char1} and {char3}: {edit_distance(char1, char3)}")
-
-    # print(timeit.timeit("foo()", globals=globals(), number=5))
-    # print(timeit.timeit("foo2()", globals=globals(), number=5))
-
-
-    ### 2. Get phonetic dictionary and homophones ###
-
-    ### 3. Phonetize phrase table ###
-    phon_table = PhonPhrases("phrases.filtered3.ph.en-de")
-    print("Number of phrases:", len(phon_table))
-    #Overview: Count phrases by number of tokens.
-    token_lengths = Counter(
-        map(lambda x: x.grapheme.count(" "), phon_table.values()))
-    print(phon_table["written"])
-
-
     # homophone_phrases = phon_table.get_homophones()
-    # print("Numer of homophones in phrase table:", len(homophone_phrases))
+    # print(f"Number of homophones: {len(homophones)}")
     # counter = 0
     # for key in homophone_phrases:
     #     if key.count(" ") >= 1:
     #         counter +=1
-    # print("Numer of homophone phrases:", counter)
-    # print(len(homophones), len(homophone_phrases))
-    ### 3. Phonetize phrase table ###
+    # print("Number of homophone phrases:", counter)
 
-    ### 4. Find phrases with smallest levenshtein distance. ###
-    #Test with simple phrase#
+    # Phon-Table stats (phrases by number of tokens).
+    # token_lengths = Counter(map(lambda x: x.grapheme.count(" "), phon_table.values()))
+    # Phon-table by number of characters of phrases (without counting whitespace).
+    # char_lengths = Counter(map(lambda x: len(x.phoneme)-x.phoneme.count(" "), phon_table.values()))
+    # print(char_lengths)
+    # print(char_lengths[5])
 
-    # search = "ɪz ɹɪtən"
-    # search2 ="ɪn ɪɡzæktli"
-    # search3 = "in"
-    # search4 = "lɪvɪŋ kɹit͡ʃɹ̩"
+    # Find phonetic neighborhoods.
+    # neighborhood_ex = list(phon_table.phonetic_levenshtein("written", max_dist=1))
+    # print(neighborhood_ex)
+    # print(len(neighborhood_ex))
 
-    # s1 = SuperString('britain', 'bɹɪtən', 'großbritannien')
-    # s2 = SuperString('britain', 'bɹɪtən', 'großbritannien')
-    # s3 = SuperString('in urban', 'ɪn ɹ̩bən', 'in städtischen')
-    # l = [s1]
-    # print(s2 in l)
-    # print(s3 in l)
-    # print(type(s1))
+    ### 1. Get phonetic dictionary and homophones ###
 
-    # similar = list(phon_table.phonetic_levenshtein("is written", max_dist=3))
-    # for item in similar:
-    #     print(item.grapheme, "|||", item.translation)
+    ### 2. Find phrases with smallest levenshtein distance. ###
+
     # print("\n")
-
+    # print(phon_table["written"])
+    # similar = list(phon_table.phonetic_levenshtein("written", max_dist=3))
+    # # print([item.grapheme for item in similar])
     # print(len(similar))
-    # print(timeit.timeit("foo2()", globals=globals(), number=5))
-    # print(phon_table["is written"], phon_table["wharton"])
-    # ex1 = phon_table["is written"]
-    # ex2 = phon_table["if britain"]
-    # print(ex1, ex2)
+    # #Additional filter with cosine similarity.
+    # phonsims = PhonSimStrings(similar)
+    # hits = list(phonsims.most_similar(phon_table["written"]))
+    # print(len(hits))
+    # for hit in hits:
+    #     print(hit.grapheme)
 
-    #Test with simple phrase#
+    # print("\n")
+    # print(phon_table["filmed"])
+    # similar2 = list(phon_table.phonetic_levenshtein("filmed", max_dist=3))
+    # print(len(similar2))
+    # #Additional filter with cosine similarity.
+    # phonsims2 = PhonSimStrings(similar2)
+    # hits2 = list(phonsims2.most_similar(phon_table["filmed"], 0.5))
+    # print(len(hits2))
+    # for hit in hits2:
+    #     print(hit.grapheme)
 
-    #Test with sentences#
-    # Errors: homograph "letters", homophone "set"
+    ### 2. Find phrases with smallest levenshtein distance. ###
+
+    ###3. Test with sentences###
     source_ex = "In fact every living creature is written in exactly the same set of letters and the same code".lower()
     test_ex = "Und in jedem Lebewesen ist es sozusagen aus Großbritannien genau mit den Buchstaben am selben Code".lower()
     target_ex = "Und zwar jedes Lebewesen verwendet die exakt gleichen Buchstaben und denselben Code".lower()
@@ -482,56 +551,29 @@ def main():
     test_ex2 = "Ich fühlte mich in den Kriegsgebieten schwer und gefährlich".lower()
     source_ex3 = "the captain waved me over"
     test_ex3 = "der kapitän wartete darauf"
-    # source_ex4 = "I was the second volunteer on the scene so there was a pretty good chance I was going to get in".lower()
-    # test_ex4 = "Ich war die zweite freiwillige Freiwillige am selben Ort also gab es eine sehr gute Chance das zu bekommen".lower()
+    source_ex4 = "I was the second volunteer on the scene so there was a pretty good chance I was going to get in".lower()
+    test_ex4 = "Ich war die zweite freiwillige Freiwillige am selben Ort also gab es eine sehr gute Chance das zu bekommen".lower()
 
-    # candidates = Candidates(source_ex, test_ex)
-    # for match2 in candidates.phon_edit_translations(phon_table):
-    #     print(match2)
-    # print(source_ex)
-    # print(test_ex)
+    # candidates = Candidates(source_ex4, test_ex4)
+    # for match in candidates.pets(phon_table):
+    #     print(match)
 
-    # source_grams = list(" ".join(elem) for elem in nltk.everygrams(source_ex.split(), max_len=3))
-    # target_grams = list(" ".join(elem) for elem in nltk.everygrams(target_ex.split(), max_len=3))
-    # test_grams = list(" ".join(elem) for elem in nltk.everygrams(test_ex.split(), max_len=3))
-    # non_cands = [phon_table[src] for src in set(source_grams).intersection(phon_table.keys()) if phon_table[src].translation in target_grams]
-    # non_cands_test = [phon_table[src] for src in set(source_grams).intersection(phon_table.keys()) if phon_table[src].translation in test_grams]
+    # print(timeit.timeit("foo2()", globals=globals(), number=5))
+    # print(cProfile.run("foo2()"))
 
-    # print(phon_table["written"])
-    # print(len(phon_table["written"].phoneme))
-    # print(d["water"])
-
-    #Phon-Table stats (phrases by number of tokens).
-    # token_lengths = Counter(map(lambda x: x.grapheme.count(" "), phon_table.values()))
-    #Phon-table by number of characters of phrases (without counting whitespace).
-    # char_lengths = Counter(map(lambda x: len(x.phoneme)-x.phoneme.count(" "), phon_table.values()))
-    # print(char_lengths)
-    # print(char_lengths[5])
-
-    # neighborhood_ex = list(phon_table.phonetic_levenshtein("written", max_dist=1))
-    # print(neighborhood_ex)
-    # print(len(neighborhood_ex))
-
-    #TODO: Testing
-    # print(counter[1]+counter[2]+counter[3]+counter[4]+counter[5]+counter[6])
-    # sims = {elem.grapheme:list(phon_table.phonetic_levenshtein(elem.grapheme))for elem in phon_table._phrases_by_length(5)}
-    # print(sims["water"])
-    # print(timeit.timeit("foo()", globals=globals(), number=5))
-    # print("\n")
-    # print(timeit.timeit("foo2()", globals=globals(), number=1))
-
-    #Test with sentences#
-    ### 4. Find phrases with smallest levenshtein distance. ###
-
+    ###3. Test with sentences###
 
     ###5. Test on files ###
-
-    # src = FileReader("tst-COMMON.en", "en", 10, mode="no_punct")
-    # tst = FileReader("trans.tok.txt", "de", 10, mode="no_punct")
-    # for source, hyp in zip(src.get_lines(), tst.get_lines()):
-    #     pets = Candidates(source.lower(), hyp.lower())
-    #     for pet in pets.phon_edit_translations(phon_table):
-    #         print(pet)
+    # print("Starting evaluation...")
+    # with open("evaluation_pets.txt", "w", encoding="utf-8") as out:
+    #     src = FileReader("evaluation.en.txt", "en", 10, mode="no_punct")
+    #     tst = FileReader("evaluation.de.txt", "de", 10, mode="no_punct")
+    #     for source, hyp in zip(src.get_lines(), tst.get_lines()):
+    #         candidates = Candidates(source.lower(), hyp.lower())
+    #         for pet in candidates.pets(phon_table):
+    #             out.write(f"{pet[0]}\t{pet[1]}\t{pet[2]}\n")
+    #     #Start of new sentence pair.
+    #     out.write("\n")
     #     print(source)
     #     print(hyp)
     #     print("\n")
