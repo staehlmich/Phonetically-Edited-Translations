@@ -11,11 +11,6 @@
 !homophone_analysis/*.py
 !homophone_analysis/utils
 !homophone_analysis/old_code
-#/homophone_analysis/
-#/homophone_analysis/mfa_input
-#/homophone_analysis/mfa_output
-#/homophone_analysis/moses_experiments
-
 
 #Test scripts
 python_test.py
@@ -24,3 +19,4 @@ asr.py
 OSR_us_000_0010_8k.wav
 homophone_analysis/nohup.out
 homophone_analysis/kaldi
+arpabet_to_ipa.csv

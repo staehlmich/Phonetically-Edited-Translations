@@ -19,56 +19,6 @@ from nltk.metrics import edit_distance
 from wordkit.features import CVTransformer, OneHotPhonemeExtractor
 from wordkit.corpora.corpora import cmudict
 from scipy.spatial import distance
-from mosestokenizer import MosesTokenizer
-
-class ArpabetChar(str):
-    """
-    Class that turn string into an Arpabet character.
-    http://www.speech.cs.cmu.edu/cgi-bin/cmudict
-    """
-    def __init__(self, chars: list):
-        self._chars = chars
-
-    def __repr__(self):
-        return "".join(char for char in self._chars)
-
-    def __str__(self):
-        return "".join(char for char in self._chars)
-
-    def __eq__(self, other):
-        if self._chars == other._chars:
-            return True
-        else:
-            return False
-
-    def __len__(self):
-        return len(self._chars)
-
-    def __setitem__(self, key, value):
-        self._chars[key] = value
-
-    def __getitem__(self, item):
-        return ArpabetChar([self._chars[item]])
-
-    def __contains__(self, item):
-        if item in self._chars:
-            return True
-        else:
-            return False
-
-    def __iter__(self):
-        for char in self._chars:
-            yield ArpabetChar([char])
-
-    def __add__(self, other):
-        added_char = [char for char in self._chars]
-        for char in other._chars:
-            added_char.append(char)
-        return ArpabetChar([added_char])
-
-    # def __iadd__(self, other):
-    #     for char in other._chars:
-    #         self._chars.append(char)
 
 class SuperString(object):
     """
@@ -209,7 +159,7 @@ class PhonPhrases(PhonDict):
             # if max(1, n-max_dist) <= len(elem.joined_phoneme) <= n+max_dist:
                 yield elem
 
-    #TODO: paramter CMU/IPA
+    #TODO: parameter CMU/IPA
     def phrase_to_phon(self, phrase:str) -> str:
         """
         Method that looks up phonetic representation in self._store.
@@ -288,14 +238,11 @@ class PhonPhrases(PhonDict):
 
 class Candidates(object):
     """
-    # I don't want to use append (slow)
-    # I want to have source and target candidates
-    # I don't want to save the candidates in class instance
-    # I want to save the index of target or source, to compare later after levdist.
-    # For the last item, I could use this: sorted(l, key = lambda x: test_ex.index(x)) (compare searchphrase to match of levdist).
+    Class that uses a phonetic table (PhonPhrases) to search which phrases
+    from source_sent have no translations in target_sent.
     """
     def __init__(self, source_sent: str, target_sent: str):
-
+        #TODO: faster if phon_table as parameter?
         self._source_sent = source_sent
         self._target_sent = target_sent
 
@@ -308,11 +255,33 @@ class Candidates(object):
         """
         return (" ".join(elem) for elem in nltk.everygrams(sent.split(), max_len=length))
 
-    def _search_candidates(self, phon_table):
+    def _search_translation(self, superstring, trg_sent: str):
+        """
+        Helper method to check if any of the translations of a superstring
+        are in the target sentence. Return None or the highest scored
+        translation.
+        @param superstring: instance of class Superstring.
+        @param trg_sent: target sentence.
+        @return: [] or highest scored translation.
+        """
+        hits = []
+        for trans in superstring.translation.split("/"):
+            hit = re.search(rf"\b{trans}\b", trg_sent)
+            if hit != None:
+                hits.append(hit.group(0))
+        if hits == []:
+            return []
+        else:
+            return hits[0]
+
+    def _search_candidates(self, phon_table, mode="cand"):
         """
         Method to check which ngrams don't have a translation in phon_table.
         @param phon_table: Instance of PhonPhrases.
-        @return: src_cands = list with source phrases that have no translation in phon_table.
+        @param mode: If mode == "cand" yield source candidate phrases.
+        If mode == "non_cand" yield target non candidate phrases.
+        @return: generator of source candidate strings or target non
+        candidate strings.
         """
         src_grams = [" ".join(elem) for elem in
                      nltk.everygrams(self._source_sent.split(), max_len=3)]
@@ -321,15 +290,17 @@ class Candidates(object):
             if src in keys:
                 value = phon_table[src]
                 if re.search(rf"\b{src}\b", self._source_sent) != None:
-                    # TODO: if any translation matches!
-                    if all(re.search(rf"\b{trans}\b", self._target_sent) == None
-                           for trans
-                           in value.translation.split("/")):
-                        yield value.grapheme
+                    trans_match = self._search_translation(value, self._target_sent)
+                    if trans_match == []:
+                        if mode == "cand":
+                            yield value.grapheme
+                    else:
+                        if mode == "non_cand":
+                            yield trans_match
 
     def _filter_candidates(self, phon_table):
         """
-        Method to filter candidates. Keep only phrases, where all tokens
+        Method to filter candidates. Keep only phrases, when all of its tokens
         do not have a translation in self._target_sent.
         @return:
         """
@@ -345,62 +316,25 @@ class Candidates(object):
         @param phon_table: Instance of PhonPhrases.
         @return:
         """
+        #TODO: save candidates and non candidates in self?
+        #TODO phon_table as class parameter?
         src_cands = self._filter_candidates(phon_table)
+        non_cands = list(self._search_candidates(phon_table, mode="non_cand"))
         for src_cand in src_cands:
             # Search phonetically similar strings (lev-dist <=3)
             src_cand_phon = phon_table.phrase_to_phon(src_cand)
             #Additional filter with cosine similarity.
             simphones = list(phon_table.phonetic_levenshtein(src_cand,max_dist=3))
+            #Hack to avoid empty grid in CVTransformer.
             if len(simphones) > 10:
                 phonsims = PhonSimStrings(simphones)
-                for simphone in phonsims.most_similar(src_cand_phon):
-                    #Account for top 3 translations.
-                    if any(re.search(rf"\b{trans}\b", self._target_sent) != None
-                           for trans
-                           in simphone.translation.split("/")):
-                                #Filter by index for higher precision.
+                for simphone in phonsims.most_similar(src_cand_phon, sim=0.6):
+                    #Check if translations in target sentence.
+                    for trans in simphone.translation.split("/"):
+                        if re.search(rf"\b{trans}\b", self._target_sent) != None:
+                            #Check if trans already has a gold translation.
+                            if trans not in non_cands:
                                 yield (src_cand, simphone.grapheme, simphone.translation)
-
-class FileReader(object):
-    """
-    Class to open and read files. Returns lines.
-    """
-    def __init__(self, filepath: str, lang:str,*args, mode=""):
-        self._filepath = filepath
-        self._lang = lang
-        self._mode = mode
-        self._args = None
-        if self._mode == "":
-            raise TypeError("Choose mode: line, token, no_punct")
-        if args:
-            self._args = args[0]
-
-    def _line_iter(self) -> Iterator:
-        """
-        Method to iterate over lines.
-        @return:
-        """
-        with open(self._filepath, "r", encoding="utf-8") as infile:
-            if self._args:
-                for line in islice(infile, self._args):
-                    yield line
-            else:
-                for line in infile:
-                    yield line
-
-    def get_lines(self):
-        """
-        Method to yield lines, according to parameter mode.
-        @return:
-        """
-        tokenize = MosesTokenizer(self._lang)
-        for line in self._line_iter():
-            if self._mode == "line":
-                yield line
-            elif self._mode == "token":
-                yield " ".join(elem for elem in tokenize(line))
-            elif self._mode == "no_punct":
-                yield " ".join(elem for elem in tokenize(line) if elem not in string.punctuation)
 
 class PhonSimStrings(object):
     """
@@ -440,7 +374,7 @@ class PhonSimStrings(object):
 
         return [self._c.vectorize(word) for word in phonstrings]
 
-    def most_similar(self, search, sim=0.4) -> Iterator:
+    def most_similar(self, search, sim=0.5) -> Iterator:
         """
         Method to return the phonetically most similar strings for search.
         @param search: Class SuperString.
@@ -453,6 +387,56 @@ class PhonSimStrings(object):
         for i, elem in enumerate(distances):
             if elem < sim:
                 yield self.candidates[i]
+
+class FileReader(object):
+    """
+    Class to open and read files. Returns lines.
+    """
+    def __init__(self, filepath: str, lang:str,*args, mode=""):
+        self._filepath = filepath
+        self._lang = lang
+        self._mode = mode
+        self._args = None
+        if self._mode == "":
+            raise TypeError("Choose mode: line, token, no_punct")
+        if args:
+            self._args = args[0]
+
+    def _line_iter(self) -> Iterator:
+        """
+        Method to iterate over lines.
+        @return:
+        """
+        with open(self._filepath, "r", encoding="utf-8") as infile:
+            if self._args:
+                for line in islice(infile, self._args):
+                    yield line
+            else:
+                for line in infile:
+                    yield line
+
+    def _tokenize(self, line: str) -> list:
+        """
+        Helper method to tokenize a string keepind internal apostrophes
+        and hyphens.
+        http://www.nltk.org/book/ch03.html#sec-tokenization
+        @param line:
+        @return: tokenized string
+        """
+        return re.findall(r"\w+(?:[-']\w+)*|'|[-.(]+|\S\w*", line)
+
+    def get_lines(self):
+        """
+        Method to yield lines, according to parameter mode.
+        @return:
+        """
+        for line in self._line_iter():
+            if self._mode == "line":
+                yield line
+            elif self._mode == "token":
+                yield " ".join(elem for elem in self._tokenize(line))
+            elif self._mode == "no_punct":
+                yield " ".join(elem for elem in self._tokenize(line) if elem not in string.punctuation)
 
 def foo():
     """
@@ -484,7 +468,7 @@ def main():
 
     # phon_dic = PhonDict("phrases.filtered3.ph.arpa.en-de")
     # print(f"Number of types: {len(phon_dic)}")
-    phon_table = PhonPhrases("phrases.filtered3.ph.arpa.en-de")
+    phon_table = PhonPhrases("phrases.filtered4.ph.arpa.en-de")
     # print("Number of phrases:", len(phon_table))
 
     # token_lengths = Counter(
@@ -553,10 +537,14 @@ def main():
     test_ex3 = "der kapitän wartete darauf"
     source_ex4 = "I was the second volunteer on the scene so there was a pretty good chance I was going to get in".lower()
     test_ex4 = "Ich war die zweite freiwillige Freiwillige am selben Ort also gab es eine sehr gute Chance das zu bekommen".lower()
+    source_ex5 = "If so , that means that what we're in the middle of right now is a transition .".lower()
+    test_ex5 = "Wenn ja , das bedeutet , dass das , was wir im Moment verlieren , ein Übergang ist .".lower()
 
-    # candidates = Candidates(source_ex4, test_ex4)
+    # candidates = Candidates(source_ex5, test_ex5)
     # for match in candidates.pets(phon_table):
     #     print(match)
+
+
 
     # print(timeit.timeit("foo2()", globals=globals(), number=5))
     # print(cProfile.run("foo2()"))
@@ -564,19 +552,21 @@ def main():
     ###3. Test with sentences###
 
     ###5. Test on files ###
-    # print("Starting evaluation...")
-    # with open("evaluation_pets.txt", "w", encoding="utf-8") as out:
-    #     src = FileReader("evaluation.en.txt", "en", 10, mode="no_punct")
-    #     tst = FileReader("evaluation.de.txt", "de", 10, mode="no_punct")
-    #     for source, hyp in zip(src.get_lines(), tst.get_lines()):
-    #         candidates = Candidates(source.lower(), hyp.lower())
-    #         for pet in candidates.pets(phon_table):
-    #             out.write(f"{pet[0]}\t{pet[1]}\t{pet[2]}\n")
-    #     #Start of new sentence pair.
-    #     out.write("\n")
-    #     print(source)
-    #     print(hyp)
-    #     print("\n")
+    print("Starting evaluation...")
+    with open("evaluation_pets2.txt", "w", encoding="utf-8") as out:
+        src = FileReader("evaluation.en.txt", "en", mode="no_punct")
+        tst = FileReader("evaluation.de.txt", "de", mode="no_punct")
+        #TODO: zip is not working.
+        for n, sents in enumerate(zip(src.get_lines(), tst.get_lines()), start=1):
+            source, hyp = sents[0], sents[1]
+            candidates = Candidates(source.lower(), hyp.lower())
+            out.write(f"{str(n)}\t")
+            for pet in candidates.pets(phon_table):
+                out.write(f" ({pet[0]}| {pet[1]}| {pet[2]}) ")
+            out.write("\n")
+        #Start of new sentence pair.
+        out.write("\n")
+
     # ###5. Test on files ###
 
 if __name__ == "__main__":

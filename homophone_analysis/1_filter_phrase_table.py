@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #Author: Michael Staehli
+
 import re
 import typing
 import string
 from collections import OrderedDict
+import operator
 
 """Script to filter and format output of moses phrase table.
 Next step: Run G2P (MFA) on filtered phrase table."""
@@ -20,15 +22,15 @@ def line_iter(filename: str):
             line = [elem.strip() for elem in line.rstrip().split("|||")]
             line = [elem for elem in line if elem != ""]
             #Exclude phrases that contain punctuation, sp.
-            if isalapspace(line[1]) == True:
-                if isalapspace(line[0]) == True:
+            if isalphaspace(line[1]) == True:
+                if isalphaspace(line[0]) == True:
                     srce = line[1]
                     trgt = line[0]
                     prob = line[2]
                     freq = line[4]
                     yield srce, trgt, prob, freq
 
-def isalapspace(phrase: str) -> bool:
+def isalphaspace(phrase: str) -> bool:
     """
     Helper function that determines if a string is all alphabetical
     characters, whitespaces and apostrophes.
@@ -42,15 +44,15 @@ def isalapspace(phrase: str) -> bool:
     else:
         return False
 
-def filter_table(table_path:str, min_freq=1, n=3) -> dict:
+def filter_table(table_path:str, min_freq=1, n=5, tscore=0.2) -> dict:
     """
     Function that filters moses phrase table and writes aligned phrases
     to separate files.
     @param table_path: Path to moses phrase table.
-    @param tscore: threshold of translation probabiliy.
-    @param min_freq: mininum frequency of phrase
+    @param min_freq: mininum frequency of phrase.
     @param n: number of translations per source phrase.
-    @return:
+    @param tscore: threshold of translation probabiliy.
+    @return: ordered dictionary with top n translations per phrase.
     """
     phrases = OrderedDict()
     for srce, trgt, prob, freq in line_iter(table_path):
@@ -63,26 +65,19 @@ def filter_table(table_path:str, min_freq=1, n=3) -> dict:
                 #Check if translation not english phrase.
                 if srce != trgt:
                     #Format element for dictionary.
-                    new_phrase = ((float(prob[0]), float(prob[2])), trgt)
-                    # Filter by conditional probabilities. Only save top 3 phrases with
-                    # highest scores (direct and inverse probability).
-                    if srce not in phrases:
-                        #Filter out phrases with direct score 1:
-                        phrases[srce] = [new_phrase]
-                    else:
-                        # Filter out phrases with direct score 1:
-                        if new_phrase[0][1] != 1:
-                            if len(phrases[srce]) < n:
-                                phrases[srce].append(new_phrase)
-                            else:
-                                #Look up translation with lowest sum of scores.
-                                mins = min((sum(x[0]) for x in phrases[srce]))
-                                if sum(new_phrase[0]) > mins:
-                                    #Delete all translations with lowest scores.
-                                    for i, elem in enumerate(phrases[srce]):
-                                        if sum(elem[0]) == mins:
-                                            phrases[srce].pop(i)
-                                    phrases[srce].append(new_phrase)
+                    new_phrase = (float(prob[0]), float(prob[2]), trgt)
+                    # Filter phrases by inverse and direct
+                    # translation probability.
+                    if all(elem > tscore for elem in new_phrase[0:2]):
+                        if srce not in phrases:
+                            phrases[srce] = [new_phrase]
+                        else:
+                            phrases[srce].append(new_phrase)
+
+    #Keep only top n translations.
+    for key, value in phrases.items():
+        sorted_trans = sorted(value, key=operator.itemgetter(0,1), reverse=True)
+        phrases[key] = sorted_trans[:n]
 
     return phrases
 
@@ -100,25 +95,25 @@ def write_filtered_table(filtered_dic: dict, filename_filtered:str, joined=True)
         with open(filename_filtered+".en-de", "w", encoding="utf-8") as out:
             for key in filtered_dic:
                 #Write all translations to the same line.
-                out.write(key + " ||| " + "/".join(trans[1] for trans in filtered_dic[key]) + "\n")
+                out.write(key + " ||| " + "/".join(trans[2] for trans in filtered_dic[key]) + "\n")
     else:
         with open(filename_filtered+".en", "w", encoding="utf-8") as src, \
           open(filename_filtered + ".de", "w", encoding="utf-8") as trg:
             for key in filtered_dic:
                 src.write(key + "\n")
                 #Write all translations to the same line.
-                trg.write("/".join(trans[1] for trans in filtered_dic[key]) + "\n")
+                trg.write("/".join(trans[2] for trans in filtered_dic[key]) + "\n")
 
 
 def main():
     #TODO: argparse.
     phrase_table_path = "/home/user/staehli/master_thesis/homophone_analysis/moses_experiments/model/phrase-table.detok"
-    phrase_table_short = "/home/user/staehli/master_thesis/homophone_analysis/moses_experiments/model/phrases.detok.short"
+    # phrase_table_short = "/home/user/staehli/master_thesis/homophone_analysis/moses_experiments/model/phrases.detok.short"
 
     filtered_table = filter_table(phrase_table_path)
 
     # write_filtered_table(filtered_table, "phrases.filtered.en", "phrases.filtered.de")
-    write_filtered_table(filtered_table, "phrases.filtered3", joined=True)
+    write_filtered_table(filtered_table, "phrases.filtered4", joined=True)
 
 if __name__ == "__main__":
     main()
