@@ -99,8 +99,8 @@ def table_g2p(table_path: str, phonebet: str, sep="\t"):
 
 def main():
 
-    table_g2p("phrases.filtered4.en-de", "ARPA")
-    # table_g2p("phrases.filtered3.en-de", "IPA")
+    # table_g2p("phrases.filtered4.en-de", "ARPA")
+    table_g2p("phrases.filtered4.en-de", "IPA")
 
 
 if __name__ == "__main__":

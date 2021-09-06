@@ -1,13 +1,13 @@
 #! /bin/bash
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=4
 
 data=/home/user/staehli/master_thesis/data/MuST-C
 zero=/home/user/staehli/master_thesis/zero
 moses=mosesdecoder
 
 # average last 5 checkpoints
-python3 $zero/scripts/checkpoint_averaging.py --path /home/user/staehli/master_thesis/zero/checkpoints/afs-tf --output /home/user/staehli/master_thesis/zero/checkpoints/ --checkpoints 5 --gpu 0
+python3 $zero/scripts/checkpoint_averaging.py --path /home/user/staehli/master_thesis/zero/checkpoints/afs-tf --output /home/user/staehli/master_thesis/zero/ --checkpoints 5 --gpu 4
 
 # to perform decoding for AFS models
 # remember to adjust enable_afs_t, enable_afs_f, and model_name
@@ -55,7 +55,7 @@ src_dev_file="$data/dev.audio.h5",\
 tgt_dev_file="$data/dev.bpe.de",\
 src_test_file="$data/test.audio.h5",\
 tgt_test_file="$data/test.bpe.de",\
-output_dir="/home/user/staehli/master_thesis/zero/checkpoints/afs-tf",\
+output_dir="/home/user/staehli/master_thesis/zero/",\
 test_output="trans.txt",\
 
 # post processing

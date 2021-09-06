@@ -44,7 +44,7 @@ def isalphaspace(phrase: str) -> bool:
     else:
         return False
 
-def filter_table(table_path:str, min_freq=1, n=5, tscore=0.2) -> dict:
+def filter_table(table_path:str, min_freq=1, n=5, tscore=0.05) -> dict:
     """
     Function that filters moses phrase table and writes aligned phrases
     to separate files.
