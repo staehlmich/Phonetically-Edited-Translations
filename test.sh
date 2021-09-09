@@ -17,7 +17,7 @@ dropout=0.2,label_smooth=0.1,attention_dropout=0.1,relu_dropout=0.2,\
 max_len=2048,batch_size=80,eval_batch_size=5,\
 token_size=15000,batch_or_token='token',\
 initializer="uniform_unit_scaling",initializer_gain=1.,\
-model_name="transformer_afs_st",scope_name="transformer",buffer_size=5000,data_leak_ratio=0.1,\
+model_name="transformer_afs",scope_name="transformer",buffer_size=5000,data_leak_ratio=0.1,\
 deep_transformer_init=False,\
 audio_num_mel_bins=40,audio_add_delta_deltas=True,speech_num_feature=120,\
 sinusoid_posenc=False,max_poslen=2048,ctc_enable=False,noise_dropout=0.3,\

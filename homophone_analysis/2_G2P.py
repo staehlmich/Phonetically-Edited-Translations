@@ -95,12 +95,13 @@ def table_g2p(table_path: str, phonebet: str, sep="\t"):
         for line in infile:
             src, trg = (elem for elem in line.split("|||"))
             src_phon = g2p(src, phonebet, phonemizer)
+            #TODO: strip whitespace at end of src_phon (IPA)
             out.write(sep.join([src.strip(" "), src_phon, trg.strip(" ")]))
 
 def main():
 
     # table_g2p("phrases.filtered4.en-de", "ARPA")
-    table_g2p("phrases.filtered4.en-de", "IPA")
+    table_g2p("phrases.filtered5.en-de", "IPA")
 
 
 if __name__ == "__main__":

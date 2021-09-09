@@ -62,8 +62,8 @@ def filter_table(table_path:str, min_freq=1, n=5, tscore=0.05) -> dict:
         if srce.count(" ") < 3:
             #Filter by frequency of english phrase.
             if float(freq[0]) > min_freq:
-                #Check if translation not english phrase.
-                if srce != trgt:
+                # Simple language detector.
+                if any(elem in srce for elem in "äöüß") == False:
                     #Format element for dictionary.
                     new_phrase = (float(prob[0]), float(prob[2]), trgt)
                     # Filter phrases by inverse and direct
@@ -113,7 +113,7 @@ def main():
     filtered_table = filter_table(phrase_table_path)
 
     # write_filtered_table(filtered_table, "phrases.filtered.en", "phrases.filtered.de")
-    write_filtered_table(filtered_table, "phrases.filtered4", joined=True)
+    write_filtered_table(filtered_table, "phrases.filtered5", joined=True)
 
 if __name__ == "__main__":
     main()

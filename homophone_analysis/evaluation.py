@@ -56,7 +56,9 @@ def evaluate(gold:str, test:str):
     micro = MicroManager()
     macro = MacroManager()
     for ground_truth, predictions in read_docs(gold, test):
+        print(ground_truth, predictions)
         tp, fp, fn = get_elements(ground_truth, predictions)
+        print(f"TP: {tp}, FP: {fp}, FN: {fn}")
         micro.update(tp, fp, fn)
         macro.update(tp, fp, fn)
     return micro.average(), macro.average()
@@ -72,7 +74,7 @@ def read_prediction(line:str) -> list:
     if pets != [[""]]:
         return pets
     else:
-        return [["NA", "NA", "NA"]]
+        return []
 
 def read_docs(gold:str, test:str):
     """
@@ -106,11 +108,9 @@ def get_elements(truth: dict, pred:dict):
                 if any(trans in truth[gld_src] for trans in trg.split("/")) \
                     == True:
                     elems["tp"] += 1
-                else:
-                    elems["fp"] += 1
     #Check false positives.
     for src in pred:
-        if all(src in gld_src for gld_src in truth) == False:
+        if any(src in gld_src for gld_src in truth) == False:
             elems["fp"] += 1
     #Check false negatives.
     for gld_src in truth:
@@ -121,7 +121,6 @@ def get_elements(truth: dict, pred:dict):
 
 def main():
     micro, macro = evaluate("gold_pets.txt", "evaluation_pets2.txt")
-    print(micro)
 
 if __name__ == "__main__":
     main()
