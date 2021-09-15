@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+ex#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #Author: Michael Staehli
 
@@ -17,11 +17,27 @@ from g2p_en import G2p
 import epitran
 import Levenshtein
 from nltk.metrics import edit_distance
-from wordkit.features import CVTransformer, PhonemeFeatureExtractor
+from wordkit.features import CVTransformer, PhonemeFeatureExtractor, PredefinedFeatureExtractor, binary_features
 from wordkit.corpora.corpora import cmudict
 from scipy.spatial import distance
 from ipapy.ipastring import IPAString
 from evaluation import evaluate
+
+def no_supra(ipa_string:str) -> str:
+    """
+    Function to remove suprasegmental symbols from IPA phonetic string.
+    @param ipa_string: phrase in IPA notation.
+    @return: Phonetic IPA string without suprasegmental symbols.
+    """
+    phonemes = []
+    for phon in ipa_string:
+        features = IPAString(unicode_string=phon,
+                             single_char_parsing=True, ignore=True)
+        rest = all(
+            [x.is_diacritic or x.is_suprasegmental for x in features])
+        if rest == False:
+            phonemes.append(phon)
+    return "".join(phon for phon in phonemes)
 
 class SuperString(object):
     """
@@ -31,8 +47,6 @@ class SuperString(object):
     def __init__(self, grapheme: str, phoneme: str, translation: str):
         self.grapheme = grapheme
         self.phoneme = phoneme
-        #TODO: Phoneme string without whitespaces.
-        self.joined_phoneme = self.join_phon()
         #TODO: translations in tuple.
         self.translation = translation
 
@@ -45,6 +59,7 @@ class SuperString(object):
             return True
         else:
             return False
+
     def join_phon(self) -> str:
         """
         Method to remove whitespaces from phonetic string.
@@ -160,10 +175,10 @@ class PhonPhrases(PhonDict):
         # Add 1 due to exclusive upper limit.
         r = range(n-max_len, n+max_len+1)
         for elem in self._store.values():
-            if len(elem.joined_phoneme) in r:
+            if len(elem.phoneme) in r:
                 yield elem
 
-    def phrase_to_phon(self, phrase:str, mode="ARPA") -> str:
+    def phrase_to_phon(self, phrase:str, mode="IPA") -> str:
         """
         Method that looks up phonetic representation in self._store.
         If phrase not in self._store, resort to DeepPhonemizer/g2p as slower method.
@@ -177,9 +192,10 @@ class PhonPhrases(PhonDict):
             if mode == "ARPA":
                 g2p = G2p()
                 return " ".join(g2p(phrase))
-            elif mod == "IPA":
+            elif mode == "IPA":
                 phonemizer = epitran.Epitran("eng-Latn")
-                return phonemizer.transliterate(phrase)
+                phon_phrase = phonemizer.transliterate(phrase)
+                return "".join(phon_phrase.split())
             else:
                 raise ValueError("mode must be 'ARPA' or 'IPA'")
 
@@ -192,34 +208,19 @@ class PhonPhrases(PhonDict):
         @return: yields SuperString object.
         """
         search_phon = self.phrase_to_phon(search, mode="IPA")
-        joined_search = "".join(elem for elem in search_phon.split())
+        threshold = int(len(search_phon) * max_dist)
+        # joined_search = "".join(elem for elem in search_phon.split())
         # Only look at phrases of length +- max_len
-        for superstring in self._phrases_by_length(len(joined_search)):
+        for superstring in self._phrases_by_length(len(search_phon)):
             # TODO: optimal distance?
-            threshold = int(len(joined_search)*max_dist)
             #Look up levenshtein distance with joined phonetized phrase.
-            if PhonPhrases.weighted_distance(joined_search, superstring.joined_phoneme) <= threshold:
-                # if self.longest_token(search,superstring.grapheme) == False:
+            if PhonPhrases.weighted_distance(search_phon, superstring.phoneme) <= threshold:
                 #Speedup/precision: translation to higher number of tokens is unlikely?
                 #TODO: is this filter necessary? Does it make sense?
                 # if superstring.grapheme.count(" ") <= search.count(" "):
                 # Check if search phrase and otuput phrase are not the same.
                 if search != superstring.grapheme:
                     yield superstring
-
-    @staticmethod
-    def longest_token(phrase1: str, phrase2: str) -> bool:
-        """
-        Helper function (calculate levenshtein distance) to check if to phrases share a common token.
-        @param phrase1: Source phrase from phon_table.
-        @param phrase2: Other source phrase from phon_table.
-        @return:
-        """
-        matches1 = any(elem for elem in phrase1.split(" ") if elem in phrase2)
-        matches2 = any(elem for elem in phrase2.split(" ") if elem in phrase1)
-        if matches1 or matches2:
-            return True
-        return False
 
     @staticmethod
     def weighted_distance(phrase1, phrase2, costs=(1,2,1)):
@@ -249,13 +250,12 @@ class Candidates(object):
     Class that uses a phonetic table (PhonPhrases) to search which phrases
     from src_sent have no translations in trg_sent.
     """
-    #TODO: parameter setting in class call?
     def __init__(self, src_sent: str, trg_sent: str, phon_table, max_dist=0.75):
-        #TODO: time if phon_table as parameter?
         self._src_sent = src_sent
         self._trg_sent = trg_sent
         #Set candidates and non-candidates.
         self._cands = self._filter_candidates(phon_table)
+        print(self._cands)
         self._non_cands = set(
             self._search_candidates(phon_table, mode="non_cand"))
         self._cand_phon_edits = self._yield_phon_edits(phon_table, max_dist=max_dist)
@@ -316,8 +316,10 @@ class Candidates(object):
                 else:
                     if mode == "non_cand":
                         yield trans_match
+            else:
+                yield src
 
-    def _soft_align(self, src_phrase:str, trg_phrase:str, src_sent:str, trg_sent:str, n=4)-> bool:
+    def _soft_align(self, src_phrase:str, trg_phrase:str, src_sent:str, trg_sent:str, n=3)-> bool:
         """
         Helper method to find soft alignment with regex between src_phrase and
         trg_phrase. Align by number of preceeding tokens.
@@ -348,14 +350,16 @@ class Candidates(object):
         @return:
         """
         candidates = list(self._search_candidates(phon_table))
+        print(candidates)
         # For every candidate phrase, all tokens must not have a translation.
-        new_candidates = [cand for cand in candidates if all(elem in candidates for elem in cand.split()) == True]
-        # Keep only the longest strings.
+        new_candidates = sorted([cand for cand in candidates if \
+        all(elem in candidates for elem in cand.split()) == True], key=len)
+        # Keep only the ngram with all subgrams.
         # Solution by: https://stackoverflow.com/a/22221956/16607753
-        new_candidates = [j for i, j in enumerate(new_candidates) if
-         all(j not in k for k in new_candidates[i + 1:])]
+        filt_candidates = [j for i, j in enumerate(new_candidates) if
+                           all(j not in k for k in new_candidates[i + 1:])]
 
-        return new_candidates
+        return filt_candidates
 
     def _yield_phon_edits(self, phon_table, max_dist=0.75) -> Iterator:
         """
@@ -374,7 +378,7 @@ class Candidates(object):
             phon_edits = phon_table.phonetic_levenshtein(src_cand, max_dist= max_dist)
             yield src_cand, src_cand_phon, phon_edits
 
-    def _yield_simphones(self, sim=0.6, mode="IPA"):
+    def _yield_simphones(self, sim=0.2, mode="IPA"):
         """
         Class to yield all phrases, that are phonetically similar to all
         candidates. Cosine similarity is calculated with phonetic phrases.
@@ -390,7 +394,7 @@ class Candidates(object):
             for simphone in phonsims.most_similar(src_cand_phon, sim=sim):
                 yield src_cand, simphone
 
-    def pets(self, sim=0.6, mode="IPA"):
+    def pets(self, sim=0.2, mode="IPA"):
         """
         Method to yield all phonetically edited translations for a
         candidate.
@@ -419,11 +423,11 @@ class PhonSimStrings(object):
     Class to return most phonetically similar strings from a list of
     SuperStrings.
     """
-    def __init__(self, superstrings: list, mode="ARPA"):
+    def __init__(self, superstrings: list, mode="IPA"):
         self.superstrings = superstrings
         self._mode = mode
         self.ipas = [self.arpabet_to_ipa(elem.phoneme, mode=self._mode) \
-                     for elem in superstrings]
+                     for elem in self.superstrings]
         self.vecs = self.ipas_to_vecs(self.ipas)
 
     @staticmethod
@@ -444,7 +448,7 @@ class PhonSimStrings(object):
         return tuple(phonemes)
 
     @staticmethod
-    def arpabet_to_ipa(phonstring: str, mode="ARPA") -> tuple:
+    def arpabet_to_ipa(phonstring: str, mode="IPA") -> tuple:
         """
         Method to turn a string of ARPABET chars into a
         string of IPA chars using the wordkit library.
@@ -476,23 +480,23 @@ class PhonSimStrings(object):
         if len(self.superstrings) > 10:
             self._c = CVTransformer(PhonemeFeatureExtractor)
             X = self._c.fit_transform(self.ipas)
+            return [self._c.vectorize(phrase) for phrase in phonstrings]
 
-            return [self._c.vectorize(word) for word in phonstrings]
-
-    def most_similar(self, search, sim=0.6) -> Iterator:
+    def most_similar(self, search, sim=0.2) -> Iterator:
         """
         Method to return the phonetically most similar strings for search.
         @param search: Class SuperString.
         @param sim: Upper bound cosine similarity.
         @return:
         """
+        #TODO: instead of threshold, I could yield the top n most similar phrases.
         search_ipa = self.arpabet_to_ipa(search, self._mode)
         # Hack to avoid empty grid in CVTransformer.
         if len(self.superstrings) > 10:
             search_vec = self._c.vectorize(search_ipa)
-            distances = [distance.cosine(search_vec, elem) for elem in self.vecs]
+            distances = [1-distance.cosine(search_vec, elem) for elem in self.vecs]
             for i, dist in enumerate(distances):
-                if dist <= sim:
+                if dist >= sim:
                     yield self.superstrings[i]
 
 class FileReader(object):
@@ -621,17 +625,6 @@ def main():
     # for hit in hits:
     #     print(hit.grapheme)
 
-    # print("\n")
-    # print(phon_table["filmed"])
-    # similar2 = list(phon_table.phonetic_levenshtein("filmed", max_dist=3))
-    # print(len(similar2))
-    # #Additional filter with cosine similarity.
-    # phonsims2 = PhonSimStrings(similar2)
-    # hits2 = list(phonsims2.most_similar(phon_table["filmed"], 0.5))
-    # print(len(hits2))
-    # for hit in hits2:
-    #     print(hit.grapheme)
-
     ### 2. Find phrases with smallest levenshtein distance. ###
 
     ###3. Test with sentences###
@@ -643,28 +636,12 @@ def main():
     test_ex3 = "der kapitän wartete darauf"
     source_ex4 = "I was the second volunteer on the scene so there was a pretty good chance I was going to get in".lower()
     test_ex4 = "Ich war die zweite freiwillige Freiwillige am selben Ort also gab es eine sehr gute Chance das zu bekommen".lower()
-    source_ex5 = "In my warped little industry , that's my brand .".lower()
-    test_ex5 = "Das ist mein Gehirn .".lower()
+    source_ex5 = "The other thing we would like to ask is of companies also all over the world that will be able to help us validate these AEDs".lower()
+    test_ex5 = "Die andere Sache die wir fragen möchten sind Firmen überall auf der Welt , die uns helfen werden , die Achtziger zu schätzen".lower()
 
-    # candidates = Candidates(source_ex, test_ex, phon_table)
-    # for match in candidates.pets():
-    #     print(match)
-
-    # print("\n")
-    # print(phon_table["filmed"])
-    # print(phon_table["felt"])
-    # print(Levenshtein.distance('fɪlmd','fɛlt'))
-    # p1 = phon_table["mary"].phoneme
-    # p2 = phon_table["amerika"].phoneme
-    # print(p1, p2)
-    # print(phon_table.phonetic_levenshtein(p1, p2))
-    # print(phon_table["that's"])
-    s1 = phon_table["filmed"].phoneme
-    s2 = phon_table["felt"].phoneme
-    s3 = phon_table["using"].phoneme
-    # s1_ipa = PhonSimStrings.arpabet_to_ipa(s1)
-    # s2_ipa = PhonSimStrings.arpabet_to_ipa(s2)
-    # print(s1, s2)
+    candidates = Candidates(source_ex5, test_ex5, phon_table)
+    for match in candidates.pets(sim=0.3):
+        print(match)
 
     # print(timeit.timeit("foo2()", globals=globals(), number=10))
     # print(cProfile.run("foo2()"))
@@ -673,27 +650,37 @@ def main():
 
     ###5. Test on files ###
     #TODO: Rewrite as function.
-    print("Generating PETS...")
-    with open("evaluation_pets2.txt", "w", encoding="utf-8") as out:
-        src = FileReader("evaluation2.en.txt", "en", mode="no_punct")
-        tst = FileReader("evaluation2.de.txt", "de", mode="no_punct")
-        # TODO: zip is not working.
-        for n, sents in enumerate(zip(src.get_lines(), tst.get_lines()), start=1):
-            source, hyp = sents[0], sents[1]
-            candidates = Candidates(source.lower(), hyp.lower(), phon_table, max_dist=0.75)
-            for pet in candidates.pets(sim=0.3):
-                out.write(f"{pet[0]}|||{pet[1]}|||{pet[2]}\t")
-            out.write("\n")
+    # print("Generating PETS...")
+    # with open("evaluation_pets2.txt", "w", encoding="utf-8") as out:
+    #     src = FileReader("evaluation2.en.txt", "en", mode="no_punct")
+    #     tst = FileReader("evaluation2.de.txt", "de", mode="no_punct")
+    #     for n, sents in enumerate(zip(src.get_lines(), tst.get_lines()), start=1):
+    #         source, hyp = sents[0], sents[1]
+    #         candidates = Candidates(source.lower(), hyp.lower(), phon_table, max_dist=0.75)
+    #         for pet in candidates.pets(sim=0.5):
+    #             out.write(f"{pet[0]}|||{pet[1]}|||{pet[2]}\t")
+    #         out.write("\n")
 
     # ###5. Test on files ###
-    # print(phon_table["beautician"].phoneme)
-    # print(phon_table["petition"].phoneme)
+
+    # micro, macro = evaluate("gold_pets.txt", "evaluation_pets2.txt")
+    # print(micro)
+     # print(phon_table["beautician"])
 
 
-    micro, macro = evaluate("gold_pets.txt", "evaluation_pets2.txt")
-    print(micro)
-    # print(phon_table["my interest"])
-    # print(phon_table["my first"])
+    # ex1 = phon_table["estimate"].phoneme
+    # ex2= phon_table["validate"].phoneme
+    # print(ex1)
+    # print(ex2)
+    # ex1_edits = phon_table.phonetic_levenshtein("estimate")
+    # ex1_simphones = PhonSimStrings(list(ex1_edits), mode="IPA")
+    # ex1_vec = ex1_simphones._c.vectorize(tuple(ex1))
+    # ex2_vec = ex1_simphones._c.vectorize(tuple(ex2))
+    # print(1-distance.cosine(ex1_vec, ex2_vec))
+
+
+
+
 
 
 

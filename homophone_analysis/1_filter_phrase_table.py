@@ -61,18 +61,18 @@ def filter_table(table_path:str, min_freq=1, n=5, tscore=0.05) -> dict:
         #Filter only phrases with 3 or less tokens.
         if srce.count(" ") < 3:
             #Filter by frequency of english phrase.
-            if float(freq[0]) > min_freq:
-                # Simple language detector.
-                if any(elem in srce for elem in "äöüß") == False:
-                    #Format element for dictionary.
-                    new_phrase = (float(prob[0]), float(prob[2]), trgt)
-                    # Filter phrases by inverse and direct
-                    # translation probability.
-                    if all(elem > tscore for elem in new_phrase[0:2]):
-                        if srce not in phrases:
-                            phrases[srce] = [new_phrase]
-                        else:
-                            phrases[srce].append(new_phrase)
+            # if float(freq[0]) > min_freq:
+            # Simple language detector.
+            if any(elem in srce for elem in "äöüß") == False:
+                #Format element for dictionary.
+                new_phrase = (float(prob[0]), float(prob[2]), trgt)
+                # Filter phrases by inverse and direct
+                # translation probability.
+                if all(elem > tscore for elem in new_phrase[0:2]):
+                    if srce not in phrases:
+                        phrases[srce] = [new_phrase]
+                    else:
+                        phrases[srce].append(new_phrase)
 
     #Keep only top n translations.
     for key, value in phrases.items():

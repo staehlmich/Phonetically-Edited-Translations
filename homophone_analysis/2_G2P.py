@@ -4,50 +4,26 @@
 
 import re
 import argparse
-from g2p_en import G2p
 # from dp.phonemizer import Phonemizer
+from g2p_en import G2p
 import epitran
+from ipapy.ipastring import IPAString
 
-
-class CMUReader(object):
+def no_supra(ipa_string:str) -> str:
     """
-    Wrapper class to call wordkit.corpora.corpora.cmudict, with some
-    minor modifications: phoneme strings are saved as Arpabet symbols.
-    Adapted methods from wordkit: self._open and self._cmu_to_cmu.
-    The second method is originally called self._cmu_to_ipa.
+    Function to remove suprasegmental symbols from IPA phonetic string.
+    @param ipa_string: phrase in IPA notation.
+    @return: Phonetic IPA string without suprasegmental symbols.
     """
-    def __init__(self, path:str):
-        self._fields = ('orthography', 'phonology')
-        self.df = reader(path, self._fields, language="eng", opener=self._open, preprocessors={"phonology": self._cmu_to_cmu})
-
-    def _open(self, path, **kwargs):
-        """Open a file for reading."""
-        df = []
-        brackets = re.compile(r"\(\d\)")
-        #Set encoding for cmu-file from official site.
-        #http://svn.code.sf.net/p/cmusphinx/code/trunk/cmudict/
-        for line in open(path, encoding="ISO-8859-1"):
-            line = line.split("\t")[0]
-            word, *rest = line.strip().split()
-            word = brackets.sub("", word).lower()
-            df.append({"orthography": word, "phonology": rest})
-        return pd.DataFrame(df)
-
-    def _cmu_to_cmu(self, phonemes):
-        """Hack-method to avoid converting Arpabet symbols to IPA."""
-        # Set values of CMU_2IPA to Arpabet keys.
-        for key in CMU_2IPA:
-            CMU_2IPA[key] = key
-        return tuple([CMU_2IPA[p] for p in phonemes])
-
-    def word_g2p(self, word: str) -> str:
-        """
-        Helper method to retrieve phonetic representation from self.df.
-        @param word: Grapheme representation of word.
-        @return: Phonetic reprsentation in Arpabet symbols.
-        """
-        phonemes = self.df.loc[self.df['orthography'] == word]["phonology"].item()
-        return " ".join(elem for elem in phonemes)
+    phonemes = []
+    for phon in ipa_string:
+        features = IPAString(unicode_string=phon,
+                             single_char_parsing=True, ignore=True)
+        rest = all(
+            [x.is_diacritic or x.is_suprasegmental for x in features])
+        if rest == False:
+            phonemes.append(phon)
+    return "".join(phon for phon in phonemes)
 
 def set_g2p(phonebet: str):
     """
@@ -72,7 +48,8 @@ def g2p(seq: str, phonebet: str, phonemizer) -> str:
     """
     #TODO: Fix whitespaces at the end of strings!
     if phonebet == "IPA":
-        return phonemizer.transliterate(seq)
+        #Remove suprasegemental features with ipapy.
+        return no_supra(phonemizer.transliterate(seq))
     if phonebet == "ARPA":
         #Remove added apostrophes by phonemizer.
         return " ".join(phonemizer(seq)).replace(" '", "")

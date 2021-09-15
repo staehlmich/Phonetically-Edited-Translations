@@ -61,6 +61,7 @@ def evaluate(gold:str, test:str):
         print(f"TP: {tp}, FP: {fp}, FN: {fn}")
         micro.update(tp, fp, fn)
         macro.update(tp, fp, fn)
+    print(f"TP:{micro.tp}, FP:{micro.fp}, FN:{micro.fn}")
     return micro.average(), macro.average()
 
 def read_prediction(line:str) -> list:
@@ -101,21 +102,34 @@ def get_elements(truth: dict, pred:dict):
     @return:
     """
     elems = {"tp":0, "fp": 0, "fn": 0}
+    #TODO: code-deduplication
     for src, trg in pred.items():
         for gld_src in truth:
-            if src in gld_src:
+            #TODO: Not a perfect filter.
+            if all(tok in gld_src for tok in src.split()) == True:
                 #Check if any of the translations in gold_trans.
                 if any(trans in truth[gld_src] for trans in trg.split("/")) \
                     == True:
                     elems["tp"] += 1
-    #Check false positives.
+                else:
+                    elems["fp"] += 1
+
+
+    # Check false positives.
     for src in pred:
-        if any(src in gld_src for gld_src in truth) == False:
+        # for tok in src.split():
+        if any(tok in gld_src for gld_src in truth for tok in src.split()) == False:
             elems["fp"] += 1
-    #Check false negatives.
+
+    # Check false negatives.
     for gld_src in truth:
-        if any(src in gld_src for src in pred) == False:
-            elems["fn"] +=1
+        if any(tok in gld_src for src in pred for tok in src.split()) == True:
+            if any(tok in truth[gld_src] for trans in pred.values() for tok in trans.split("/")) == True:
+                pass
+            else:
+                elems["fn"] +=1
+        else:
+            elems["fn"] += 1
 
     return elems["tp"], elems["fp"], elems["fn"]
 
