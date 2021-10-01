@@ -1,4 +1,4 @@
-ex#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #Author: Michael Staehli
 
@@ -195,7 +195,7 @@ class PhonPhrases(PhonDict):
             elif mode == "IPA":
                 phonemizer = epitran.Epitran("eng-Latn")
                 phon_phrase = phonemizer.transliterate(phrase)
-                return "".join(phon_phrase.split())
+                return no_supra("".join(phon_phrase.split()))
             else:
                 raise ValueError("mode must be 'ARPA' or 'IPA'")
 
@@ -209,7 +209,6 @@ class PhonPhrases(PhonDict):
         """
         search_phon = self.phrase_to_phon(search, mode="IPA")
         threshold = int(len(search_phon) * max_dist)
-        # joined_search = "".join(elem for elem in search_phon.split())
         # Only look at phrases of length +- max_len
         for superstring in self._phrases_by_length(len(search_phon)):
             # TODO: optimal distance?
@@ -255,7 +254,7 @@ class Candidates(object):
         self._trg_sent = trg_sent
         #Set candidates and non-candidates.
         self._cands = self._filter_candidates(phon_table)
-        print(self._cands)
+        # print(self._cands)
         self._non_cands = set(
             self._search_candidates(phon_table, mode="non_cand"))
         self._cand_phon_edits = self._yield_phon_edits(phon_table, max_dist=max_dist)
@@ -269,22 +268,27 @@ class Candidates(object):
         """
         return (" ".join(elem) for elem in nltk.everygrams(sent.split(), max_len=length))
 
-    def _search_translation(self, superstring, trg_sent: str):
+    def _search_translation(self, superstring):
         """
         Helper method to check if any of the translations of a superstring
         are in the target sentence. Return None or the highest scored
         translation.
         @param superstring: instance of class Superstring.
-        @param trg_sent: target sentence.
         @return: [] or highest scored translation.
         """
+        #TODO: I use this function in pets too. But with different goal!
         hits = []
+        # src_count = self._src_sent.count(superstring.grapheme)
         for trans in superstring.translation.split("/"):
             #Check if individual tokens of translation phrase in target.
-            #There might be a token in between them.
-            hit = any(re.search(rf"{tok}", trg_sent) != None for tok in trans.split())
+            # There might be a token in between them.
+            hit = any(re.search(rf"{tok}", self._trg_sent) != None for tok in trans.split())
             if hit == True:
                 hits.append(trans)
+            # TODO: better hits?
+            # matches = re.findall(trans, self._trg_sent)
+            # if len(matches) == src_count:
+            #     hits.append(trans)
         if hits == []:
             return []
         else:
@@ -306,37 +310,34 @@ class Candidates(object):
         for src in src_grams:
             if src in keys:
                 value = phon_table[src]
-                #Search source phrase in source sentence. Not needed. Done in src_grams.
-                # if re.search(rf"\b{src}\b", self._src_sent) != None:
                 #Search if translation of src_sent in trg_sent.
-                trans_match = self._search_translation(value, self._trg_sent)
+                trans_match = self._search_translation(value)
                 if trans_match == []:
                     if mode == "cand":
                         yield value.grapheme
                 else:
+                    # TODO: Include all translations?
                     if mode == "non_cand":
                         yield trans_match
             else:
                 yield src
 
-    def _soft_align(self, src_phrase:str, trg_phrase:str, src_sent:str, trg_sent:str, n=3)-> bool:
+    def _soft_align(self, src_phrase:str, trg_phrase:str, n=3)-> bool:
         """
         Helper method to find soft alignment with regex between src_phrase and
         trg_phrase. Align by number of preceeding tokens.
         @param src_phrase:
         @param trg_phrase:
-        @param src_sent:
-        @param trg_sent:
         @param n: max distance between positions.
         @return: True if preceeding number of tokens <= n.
         """
         #Get starting index of phrases.
-        src_id = re.search(rf'\b{src_phrase}\b', src_sent)
-        trg_id = re.search(rf'\b{trg_phrase}\b', trg_sent)
+        src_id = re.search(rf'\b{src_phrase}\b', self._src_sent)
+        trg_id = re.search(rf'\b{trg_phrase}\b', self._trg_sent)
         if src_id and trg_id != None:
             #Get number of tokens before phrase.
-            src_pos = src_sent[:src_id.start()].count(" ")
-            trg_pos = trg_sent[:trg_id.start()].count(" ")
+            src_pos = self._src_sent[:src_id.start()].count(" ")
+            trg_pos = self._trg_sent[:trg_id.start()].count(" ")
 
             if abs(src_pos-trg_pos) <= n:
                 return True
@@ -350,14 +351,22 @@ class Candidates(object):
         @return:
         """
         candidates = list(self._search_candidates(phon_table))
-        print(candidates)
         # For every candidate phrase, all tokens must not have a translation.
         new_candidates = sorted([cand for cand in candidates if \
         all(elem in candidates for elem in cand.split()) == True], key=len)
+        #TODO: how can I improve this filter?
         # Keep only the ngram with all subgrams.
         # Solution by: https://stackoverflow.com/a/22221956/16607753
         filt_candidates = [j for i, j in enumerate(new_candidates) if
                            all(j not in k for k in new_candidates[i + 1:])]
+
+        # print([cand for cand in candidates if \
+        # all(elem in candidates for elem in cand.split()) == True])
+        # print("\n")
+        # print(filt_candidates)
+        # print(f"Len unfiltered candidates: {len(candidates)}")
+        # print(f"Len new candidates: {len(new_candidates)}")
+        # print(f"Len filtered candidates: {len(filt_candidates)}")
 
         return filt_candidates
 
@@ -406,15 +415,14 @@ class Candidates(object):
         """
         for src_cand, simphone in self._yield_simphones(sim=sim, mode=mode):
             # Check if translations in target sentence.
-            trans = self._search_translation(simphone, self._trg_sent)
+            trans = self._search_translation(simphone)
             if trans != []:
                 # Check if translation not in gold translations.
                 if all(re.search(rf"\b{trans}\b", non_cand) == None for
                        non_cand in self._non_cands) == True:
                     # Check if position of simphone and trans in
                     # sentences similar.
-                    if self._soft_align(src_cand, trans, self._src_sent,
-                                        self._trg_sent) == True:
+                    if self._soft_align(src_cand, trans) == True:
                         # TODO: only yield longest translation/phrase.
                         yield (src_cand, simphone.grapheme, simphone.translation)
 
@@ -464,6 +472,7 @@ class PhonSimStrings(object):
             #Convert characters and split dipthtongs.
             return tuple("".join(cmudict.cmu_to_ipa(arpa_string)))
         elif mode == "IPA":
+            #TODO: do I need to join?
             phonstring = "".join(phon for phon in phonstring)
             return PhonSimStrings._is_valid(phonstring)
         else:
@@ -566,11 +575,14 @@ def foo2():
     To timeit 2 method.
     @return:
     """
-    phon_table = PhonPhrases("phrases.filtered4.ph.ipa.en-de")
-    s1 = phon_table["set of"].phoneme
-    s2 = phon_table["set"].phoneme
+    phon_table = PhonPhrases("phrases.filtered5.ph.ipa.en-de")
+    source_ex5 = "Now the transition point happened when these communities got so close that in fact they got together and decided to write down the whole recipe for the community together on one string of DNA".lower()
+    test_ex5 = "Der Wandel kam zu dem Punkt an dem diese Gruppen so zueinander kamen dass sie eigentlich gemeinsam ein vollendendes Rezept für die Gemeinschaft in der Gemeinschaft versammelten".lower()
 
-    phon_table.weighted_distance(s1, s2)
+    candidates = Candidates(source_ex5, test_ex5, phon_table)
+    for match in candidates.pets(sim=0.5):
+        print(match)
+
 
 def main():
 
@@ -628,20 +640,6 @@ def main():
     ### 2. Find phrases with smallest levenshtein distance. ###
 
     ###3. Test with sentences###
-    source_ex = "In fact every living creature is written in exactly the same set of letters and the same code".lower()
-    test_ex = "Und in jedem Lebewesen ist es sozusagen aus Großbritannien genau mit den Buchstaben am selben Code".lower()
-    source_ex2 = "I filmed in war zones difficult and dangerous".lower()
-    test_ex2 = "Ich fühlte mich in den Kriegsgebieten schwer und gefährlich".lower()
-    source_ex3 = "the captain waved me over"
-    test_ex3 = "der kapitän wartete darauf"
-    source_ex4 = "I was the second volunteer on the scene so there was a pretty good chance I was going to get in".lower()
-    test_ex4 = "Ich war die zweite freiwillige Freiwillige am selben Ort also gab es eine sehr gute Chance das zu bekommen".lower()
-    source_ex5 = "The other thing we would like to ask is of companies also all over the world that will be able to help us validate these AEDs".lower()
-    test_ex5 = "Die andere Sache die wir fragen möchten sind Firmen überall auf der Welt , die uns helfen werden , die Achtziger zu schätzen".lower()
-
-    candidates = Candidates(source_ex5, test_ex5, phon_table)
-    for match in candidates.pets(sim=0.3):
-        print(match)
 
     # print(timeit.timeit("foo2()", globals=globals(), number=10))
     # print(cProfile.run("foo2()"))
@@ -651,35 +649,49 @@ def main():
     ###5. Test on files ###
     #TODO: Rewrite as function.
     # print("Generating PETS...")
-    # with open("evaluation_pets2.txt", "w", encoding="utf-8") as out:
-    #     src = FileReader("evaluation2.en.txt", "en", mode="no_punct")
-    #     tst = FileReader("evaluation2.de.txt", "de", mode="no_punct")
+    # with open("pets.dev.txt", "w", encoding="utf-8") as out:
+    #     src = FileReader("pets.dev.en.txt", "en", mode="no_punct")
+    #     tst = FileReader("pets.dev.de.txt", "de", mode="no_punct")
     #     for n, sents in enumerate(zip(src.get_lines(), tst.get_lines()), start=1):
     #         source, hyp = sents[0], sents[1]
     #         candidates = Candidates(source.lower(), hyp.lower(), phon_table, max_dist=0.75)
-    #         for pet in candidates.pets(sim=0.5):
+    #         for pet in candidates.pets(sim=0.3):
     #             out.write(f"{pet[0]}|||{pet[1]}|||{pet[2]}\t")
     #         out.write("\n")
 
     # ###5. Test on files ###
 
-    # micro, macro = evaluate("gold_pets.txt", "evaluation_pets2.txt")
+    # micro, macro = evaluate("pets.dev.gold.txt", "pets.dev.txt")
     # print(micro)
      # print(phon_table["beautician"])
 
-
-    # ex1 = phon_table["estimate"].phoneme
-    # ex2= phon_table["validate"].phoneme
+    # print(phon_table["together"])
+    # ex1 = phon_table["lately"].phoneme
+    # # ex1 = phon_table.phrase_to_phon("door")
+    # ex2= phon_table["light"].phoneme
     # print(ex1)
     # print(ex2)
-    # ex1_edits = phon_table.phonetic_levenshtein("estimate")
+    # ex1_edits = phon_table.phonetic_levenshtein("lately")
     # ex1_simphones = PhonSimStrings(list(ex1_edits), mode="IPA")
     # ex1_vec = ex1_simphones._c.vectorize(tuple(ex1))
     # ex2_vec = ex1_simphones._c.vectorize(tuple(ex2))
     # print(1-distance.cosine(ex1_vec, ex2_vec))
 
+    source_ex5 = "Now the transition point happened when these communities got so close that in fact they got together and decided to write down the whole recipe for the community together on one string of DNA".lower()
+    # test_ex5 = "Der Wandel kam zu dem Punkt an dem diese Gruppen so zueinander kamen dass sie eigentlich gemeinsam ein vollendendes Rezept für die Gemeinschaft in der Gemeinschaft versammelten".lower()
+    #
+    # candidates = Candidates(source_ex5, test_ex5, phon_table)
+    # for match in candidates.pets(sim=0.5):
+    #     print(match)
+
+    l = list(enumerate(source_ex5.split()))
+    print(l)
+    print(list(nltk.ngrams(l, 2)))
+
+    # print(timeit.timeit("foo2()", globals=globals(), number=1))
 
 
+    # print(list((n, p)for n, p in enumerate(nltk.ngrams(test_ex5.split(), n=3))))
 
 
 
