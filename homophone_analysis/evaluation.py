@@ -3,8 +3,6 @@
 #Author: Michael Staehli
 
 import typing
-# import pydevd_pycharm
-# pydevd_pycharm.settrace('localhost', port=12345, stdoutToServer=True, stderrToServer=True)
 
 def prf(tp, fp, fn):
     try:
@@ -54,15 +52,13 @@ class MacroManager:
 
 def evaluate(gold:str, test:str):
     micro = MicroManager()
-    macro = MacroManager()
     for ground_truth, predictions in read_docs(gold, test):
         print(ground_truth, predictions)
         tp, fp, fn = get_elements(ground_truth, predictions)
         print(f"TP: {tp}, FP: {fp}, FN: {fn}")
         micro.update(tp, fp, fn)
-        macro.update(tp, fp, fn)
     print(f"TP:{micro.tp}, FP:{micro.fp}, FN:{micro.fn}")
-    return micro.average(), macro.average()
+    return micro.average()
 
 def read_prediction(line:str) -> list:
     """
@@ -108,12 +104,11 @@ def get_elements(truth: dict, pred:dict):
             #TODO: Not a perfect filter.
             if all(tok in gld_src for tok in src.split()) == True:
                 #Check if any of the translations in gold_trans.
-                if any(trans in truth[gld_src] for trans in trg.split("/")) \
+                if any(trans in truth[gld_src] for trans in trg) \
                     == True:
                     elems["tp"] += 1
                 else:
                     elems["fp"] += 1
-
 
     # Check false positives.
     for src in pred:
@@ -124,7 +119,7 @@ def get_elements(truth: dict, pred:dict):
     # Check false negatives.
     for gld_src in truth:
         if any(tok in gld_src for src in pred for tok in src.split()) == True:
-            if any(tok in truth[gld_src] for trans in pred.values() for tok in trans.split("/")) == True:
+            if any(tok in truth[gld_src] for trans in pred.values() for tok in trans) == True:
                 pass
             else:
                 elems["fn"] +=1
@@ -134,7 +129,7 @@ def get_elements(truth: dict, pred:dict):
     return elems["tp"], elems["fp"], elems["fn"]
 
 def main():
-    micro, macro = evaluate("gold_pets.txt", "evaluation_pets2.txt")
+    micro = evaluate("gold_pets.txt", "evaluation_pets2.txt")
 
 if __name__ == "__main__":
     main()

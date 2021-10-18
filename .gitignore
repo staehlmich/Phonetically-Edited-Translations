@@ -4,7 +4,10 @@
 /mgizapp
 /sample-models/
 /subword-nmt/
-/zero/checkpoints
+/zero
+/checkpoints
+/output
+/train
 /fast_align
 /homophone_analysis/*.*
 /homophone_analysis/*/
@@ -20,3 +23,7 @@ OSR_us_000_0010_8k.wav
 homophone_analysis/nohup.out
 homophone_analysis/kaldi
 arpabet_to_ipa.csv
+
+#logs
+standard.log
+standard.log2
