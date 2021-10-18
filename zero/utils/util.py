@@ -267,10 +267,9 @@ def get_session(gpus):
     sess_config.gpu_options.allow_growth = True
     if len(gpus) > 0:
         device_str = ",".join([str(i) for i in gpus])
-        print("List of physical devices:", sess_config.gpu_options.visible_device_list)
         sess_config.gpu_options.visible_device_list = device_str
-        print(sess_config.gpu_options.visible_device_list)
     sess = tf.Session(config=sess_config)
+
     return sess
 
 

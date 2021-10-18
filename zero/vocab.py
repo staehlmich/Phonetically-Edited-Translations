@@ -5,6 +5,7 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+import io
 
 
 class Vocab(object):
@@ -37,7 +38,7 @@ class Vocab(object):
         return len(self.word2id)
 
     def load_vocab(self, vocab_file):
-        with open(vocab_file, 'r', encoding='utf-8') as reader:
+        with io.open(vocab_file, 'r', encoding='utf-8') as reader:
             for token in reader:
                 self.insert(token.strip())
 
