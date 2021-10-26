@@ -2,17 +2,12 @@
 # -*- coding: utf-8 -*-
 #Author: Michael Staehli
 
-import argparse
 import re
-
-import epitran
+import argparse
+# from dp.phonemizer import Phonemizer
 from g2p_en import G2p
+import epitran
 from ipapy.ipastring import IPAString
-
-"""Script to phonetize source phrases of filtered phrase table.
-Phonetized tokens are not separated by whitespace.
-Install epitran with lex_lookup from: https://github.com/dmort27/epitran
-Next step: Run PETs."""
 
 def no_supra(ipa_string:str) -> str:
     """
@@ -51,12 +46,12 @@ def g2p(seq: str, phonebet: str, phonemizer) -> str:
     If "ARPA" G2p is set as G2P phonemizer.
     @return:
     """
+    #TODO: Fix whitespaces at the end of strings!
     if phonebet == "IPA":
-        # Remove suprasegemental features with ipapy.
-        # Suprasegmental features not supported with wordkit in PETS.
+        #Remove suprasegemental features with ipapy.
         return no_supra(phonemizer.transliterate(seq))
     if phonebet == "ARPA":
-        # Remove added apostrophes by phonemizer.
+        #Remove added apostrophes by phonemizer.
         return " ".join(phonemizer(seq)).replace(" '", "")
 
 def table_g2p(table_path: str, phonebet: str, sep="\t"):
@@ -69,22 +64,22 @@ def table_g2p(table_path: str, phonebet: str, sep="\t"):
     @param sep: symbol to separate source, phonemes, translations.
     @return: File contains lines with:
     (source_phrase, phonetized phrase, target_phrases)
-    Phonetized tokens are not separated by whitespace.
     """
     with open(table_path, "r", encoding="utf-8") as infile, \
         open(table_path[:-5]+f"ph.{phonebet.lower()}.en-de", "w", encoding="utf-8") as out:
+        #TODO: instantiate G2P package before loop, to avoid prints.
         phonemizer = set_g2p(phonebet)
         for line in infile:
             src, trg = (elem for elem in line.split("|||"))
             src_phon = g2p(src, phonebet, phonemizer)
+            #TODO: strip whitespace at end of src_phon (IPA)
             out.write(sep.join([src.strip(" "), src_phon, trg.strip(" ")]))
 
 def main():
-    parser = argparse.ArgumentParser(description="Script to phonetize source phrases of filtered phrase table.")
-    parser.add_argument("tablepath", help="Path to filtered phrase table file.")
-    parser.add_argument("-p", "--phonebet", help="Choose phonetic alphabet: IPA or ARPA.", default="IPA")
-    args = parser.parse_args()
-    table_g2p(args.tablepath, args.phonebet)
+
+    # table_g2p("phrases.filtered4.en-de", "ARPA")
+    table_g2p("phrases.filtered5.en-de", "IPA")
+
 
 if __name__ == "__main__":
     main()

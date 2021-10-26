@@ -2,15 +2,14 @@
 # -*- coding: utf-8 -*-
 #Author: Michael Staehli
 
-import argparse
-import operator
 import re
-import string
 import typing
+import string
 from collections import OrderedDict
+import operator
 
 """Script to filter and format output of moses phrase table.
-Next step: Run G2P on filtered phrase table."""
+Next step: Run G2P (MFA) on filtered phrase table."""
 
 def line_iter(filename: str):
     """
@@ -45,12 +44,12 @@ def isalphaspace(phrase: str) -> bool:
     else:
         return False
 
-def filter_table(table_path:str, order=3, n=5, tscore=0.05) -> dict:
+def filter_table(table_path:str, min_freq=1, n=5, tscore=0.05) -> dict:
     """
     Function that filters moses phrase table and writes aligned phrases
     to separate files.
     @param table_path: Path to moses phrase table.
-    @param order: max number of tokens per source phrase.
+    @param min_freq: mininum frequency of phrase.
     @param n: number of translations per source phrase.
     @param tscore: threshold of translation probabiliy.
     @return: ordered dictionary with top n translations per phrase.
@@ -58,9 +57,11 @@ def filter_table(table_path:str, order=3, n=5, tscore=0.05) -> dict:
     phrases = OrderedDict()
     for srce, trgt, prob, freq in line_iter(table_path):
         prob = prob.split()
+        freq = freq.split()
         #Filter only phrases with 3 or less tokens.
-        if srce.count(" ") < order:
+        if srce.count(" ") < 3:
             #Filter by frequency of english phrase.
+            # if float(freq[0]) > min_freq:
             # Simple language detector.
             if any(elem in srce for elem in "äöüß") == False:
                 #Format element for dictionary.
@@ -103,20 +104,16 @@ def write_filtered_table(filtered_dic: dict, filename_filtered:str, joined=True)
                 #Write all translations to the same line.
                 trg.write("/".join(trans[2] for trans in filtered_dic[key]) + "\n")
 
-def main():
-    tablepath = "/home/user/staehli/master_thesis/homophone_analysis/moses_experiments/model/phrase-table.detok"
-    outfile = "phrases.filtered6"
-    parser = argparse.ArgumentParser(description="Script to filter and format output of moses phrase table.")
-    parser.add_argument("-t", "--tablepath", help="Path to phrase table file.", default=tablepath)
-    parser.add_argument("-n", "--name", help="Name of the filtered phrase table.", default=outfile)
-    parser.add_argument("-r", "--range", help="Max number of tokens per source phrase.", default=3)
-    parser.add_argument("-n", "--number", help="Number of translations per source phrase.", default=5)
-    parser.add_argument("-s", "--score", help="Min threshold of translation probabiliy.", default=0.05)
-    parser.add_argument("-j", "--joined", help="If True, writes source and target phrases to the same file.", default=True)
-    args = parser.parse_args()
 
-    filtered_table = filter_table(args.tablepath)
-    write_filtered_table(filtered_table, args.outfile, joined=args.joined)
+def main():
+    #TODO: argparse.
+    phrase_table_path = "/home/user/staehli/master_thesis/homophone_analysis/moses_experiments/model/phrase-table.detok"
+    # phrase_table_short = "/home/user/staehli/master_thesis/homophone_analysis/moses_experiments/model/phrases.detok.short"
+
+    filtered_table = filter_table(phrase_table_path)
+
+    # write_filtered_table(filtered_table, "phrases.filtered.en", "phrases.filtered.de")
+    write_filtered_table(filtered_table, "phrases.filtered5", joined=True)
 
 if __name__ == "__main__":
     main()
