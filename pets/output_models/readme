@@ -1,0 +1,8 @@
+
+mt.txt: translation from textual MT
+afs.txt: output of the adaptive feature selection model
+cascade.txt: output of ASR+MT
+
+docmodel-swbd.txt: contextual model with sliding-window based decoding, translate C chunks but only retain the translation for the last one
+docmodel-imed.txt: contexutal model with in-model ensemble decoding, jointly perform sentence-level and document-level translation with an ensemble prob of 0.5
+
